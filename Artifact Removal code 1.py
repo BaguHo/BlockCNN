@@ -13,7 +13,7 @@ from sklearn.model_selection import train_test_split
 import torch
 from torch.utils.data import Dataset, DataLoader
 
-patch_size = 224
+patch_size = 24
 
 
 def extract_patches_from_rgb_image(image_path: str, patch_size: int):

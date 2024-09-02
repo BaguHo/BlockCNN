@@ -11,115 +11,101 @@ from torch.utils.data import Dataset, DataLoader
 from PIL import Image
 from model import CNN_Net
 from glob import glob
+from torchvision import transforms
 
 # Constants
+# TODO: image_height and image_width need to change 
+image_height, image_width = 24, 24
 BATCH_SIZE = 32
 FILTER_K = 64
 BEST_LOSS = 1e8
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-patch_size_24 = 24
-patch_size_8 = 8
+patch_size = 24
+denoised_dir = '../high-frequency-datasets/m-gaid-dataset-high-frequency/denoised'
+csv_path = '../high-frequency-datasets/m-gaid-dataset-high-frequency/classified_label.csv'
+
+transform = transforms.Compose([
+    transforms.Resize((PICTURE_SIZE, PICTURE_SIZE)),
+    transforms.ToTensor()
+])
 
 
-def extract_patches_from_rgb_image(image_path: str, patch_size_24: int, patch_size_8: int):
-    patches_24, patches_8, patch_numbers = [], [], []
+def extract_patches_from_rgb_image(image_path: str, patch_size: int):
+    patches, patch_numbers = [], []
     if not os.path.exists(image_path):
         print(f"Warning: File {image_path} does not exist.")
-        return [], [], []
+        return [], []
 
     image = Image.open(image_path).convert('RGB')
     width, height = image.size
     image_array = np.array(image)
     patch_number = 0
 
-    # Extract 24x24 patches
-    for i in range(0, height, patch_size_24):
-        for j in range(0, width, patch_size_24):
-            patch_24 = image_array[i:i+patch_size_24, j:j+patch_size_24]
-            if patch_24.shape[0] < patch_size_24 or patch_24.shape[1] < patch_size_24:
-                patch_24 = np.pad(patch_24, ((0, patch_size_24 - patch_24.shape[0]),
-                                             (0, patch_size_24 - patch_24.shape[1]), (0, 0)), 'constant')
-            patches_24.append(patch_24)
-
-            # Extract corresponding 8x8 patches from the center
-            center_i, center_j = i + (patch_size_24 // 2) - (patch_size_8 // 2), j + \
-                (patch_size_24 // 2) - (patch_size_8 // 2)
-            patch_8 = image_array[center_i:center_i+patch_size_8, center_j:center_j+patch_size_8]
-            if patch_8.shape[0] < patch_size_8 or patch_8.shape[1] < patch_size_8:
-                patch_8 = np.pad(patch_8, ((0, patch_size_8 - patch_8.shape[0]),
-                                           (0, patch_size_8 - patch_8.shape[1]), (0, 0)), 'constant')
-            patches_8.append(patch_8)
-
+    for i in range(0, height, patch_size):
+        for j in range(0, width, patch_size):
+            patch = image_array[i:i+patch_size, j:j+patch_size]
+            if patch.shape[0] < patch_size or patch.shape[1] < patch_size:
+                patch = np.pad(patch, ((0, patch_size - patch.shape[0]),
+                               (0, patch_size - patch.shape[1]), (0, 0)), 'constant')
+            patches.append(patch)
             patch_numbers.append(patch_number)
             patch_number += 1
 
-    return patches_24, patches_8, patch_numbers
+    return patches, patch_numbers
 
 
 def load_data_from_csv(csv_path, denoised_dir):
     df = pd.read_csv(csv_path)
 
-    all_denoised_patches_24 = []
-    all_denoised_patches_8 = []
+    all_denoised_patches = []
     all_scores = []
     denoised_image_names = []
     all_patch_numbers = []
 
     for _, row in df.iterrows():
         denoised_file_name = f"denoised_{row['image_name']}.png"
+
         denoised_path = os.path.join(denoised_dir, denoised_file_name)
 
-        denoised_patches_24, denoised_patches_8, denoised_patch_numbers = extract_patches_from_rgb_image(
-            denoised_path, patch_size_24, patch_size_8)
+        denoised_patches, denoised_patch_numbers = extract_patches_from_rgb_image(denoised_path, 24)
 
-        if len(denoised_patches_24) == 0:
-            print(f"Warning: No patches found for {row['image_name']}. Skipping.")
-            continue
+        all_denoised_patches.extend(denoised_patches)
+        denoised_image_names.extend([row['image_name']] * len(denoised_patches))
+        all_patch_numbers.extend(denoised_patch_numbers)
 
         patch_scores = row['patch_score'].strip('[]').replace(',', ' ').split()
         scores = np.array([0 if float(score) == 0 else 1 for score in patch_scores])
 
-        if len(scores) < len(denoised_patches_24):
-            missing_count = len(denoised_patches_24) - len(scores)
-            random_scores = np.random.choice([0, 1], size=missing_count)
-            scores = np.concatenate([scores, random_scores])
-
-        if len(scores) != len(denoised_patches_24):
-            print(f"Error: Mismatch after filling scores for {row['image_name']} "
-                  f"denoised patches: {len(denoised_patches_24)}, scores: {len(scores)}")
-            continue
-
-        all_denoised_patches_24.extend(denoised_patches_24)
-        all_denoised_patches_8.extend(denoised_patches_8)
-        denoised_image_names.extend([row['image_name']] * len(denoised_patches_24))
-        all_patch_numbers.extend(denoised_patch_numbers)
         all_scores.extend(scores)
 
-    return all_denoised_patches_24, all_denoised_patches_8, all_scores, denoised_image_names, all_patch_numbers
+    return all_denoised_patches, all_scores, denoised_image_names, all_patch_numbers
 
 
-denoised_dir = '../high-frequency-datasets/m-gaid-dataset-high-frequency/denoised'
-csv_path = '../high-frequency-datasets/m-gaid-dataset-high-frequency/classified_label.csv'
+class My_dataloader(Dataset):
+    def __init__(self, data_24, transform):
+        self.data_24 = data_24
+        self.pathes_24 = list(glob(self.data_24))
+        self.transform = transform
 
-denoised_patches_24, denoised_patches_8, labels, denoised_image_names, all_patch_numbers = load_data_from_csv(
-    csv_path, denoised_dir)
+    def __len__(self):
+        return len(self.pathes_24)
 
-# Continue with training the model using denoised_patches_24 and denoised_patches_8 as needed...
+    def __getitem__(self, idx):
+        raw_image_path = self.pathes_24[idx]
 
+        width, height = 24, 24  # Assume image size is 224x224
+        with open(raw_image_path, 'rb') as f:
+            img_data = np.frombuffer(f.read(), dtype=np.uint8)
 
-# Continue with training the model using denoised_patches_24 and denoised_patches_8 as needed...
+        img_24 = img_data.reshape((height, width, 1))
 
-ROOT = "/home/mlcm/Danial/Image_compression/dataset"
+        if self.transform:
+            img_24 = Image.fromarray(img_24)
+            img_24 = self.transform(img_24)
+            img_8 = img_24[:, 6:18, 6:18]
 
-original_dir = '../high-frequency-datasets/m-gaid-dataset-high-frequency/original'
-denoised_dir = '../high-frequency-datasets/m-gaid-dataset-high-frequency/denoised'
-csv_path = '../high-frequency-datasets/m-gaid-dataset-high-frequency/classified_label.csv'
-
-# X_train, X_temp, X_train_denoised, X_temp_denoised, y_train, y_temp = train_test_split(
-#     original_patches, denoised_patches, labels, test_size=0.2, random_state=42)
-# X_val, X_test, X_val_denoised, X_test_denoised, y_val, y_test = train_test_split(
-#     X_temp, X_temp_denoised, y_temp, test_size=0.5, random_state=42)
+        return img_24 * 255., img_8 * 255.
 
 
 def parse_args():
@@ -155,7 +141,7 @@ def save_checkpoint(state, is_best, filename):
         shutil.copyfile(filename, os.path.join(os.path.dirname(filename), 'model_best.pth.tar'))
 
 
-def main():
+def training_model():
     # Parse arguments
     args = parse_args()
 
@@ -167,7 +153,7 @@ def main():
     create_dir(os.path.join(args.save_dir, "logs"))
 
     # Load model
-    model = CNN_Net(FILTER_K)
+    model = CNN_Net()
     model.apply(weight_init)
 
     # Load loss function
@@ -177,11 +163,16 @@ def main():
     optimizer = optim.Adam(model.parameters(), lr=1e-4)
 
     # Set up data set
-    train_data_24 = denoised_patches_24
+    train_data_24, _, _, _ = load_data_from_csv(csv_path, denoised_dir)
+    train_data_24 = train_data_24[:500]
+    train_data_24 = My_dataloader(train_data_24)
+    print("train_data_24")
+    print(train_data_24)
     train_loader = DataLoader(train_data_24, batch_size=BATCH_SIZE, shuffle=True, num_workers=8)
 
     # Train model
-    for epoch in range(500):
+    # epoch 500 to 10
+    for epoch in range(10):
         for i, (data_24, data_8) in enumerate(train_loader):
             optimizer.zero_grad()
             input = data_24[:, :, 0:16, :].clone().detach().float()
@@ -192,6 +183,7 @@ def main():
             loss = loss_fn(out, target)
             loss.backward()
             optimizer.step()
+            print('Train i: {} \tLoss: {:.6f}'.format(i, loss.item()))
 
         print('Train Epoch: {} \tLoss: {:.6f}'.format(epoch, loss.item()))
 
@@ -203,5 +195,5 @@ def main():
     }, is_best=False, filename=os.path.join(args.save_dir, 'checkpoint', 'checkpoint.pth.tar'))
 
 
-if __name__ == "__main__":
-    main()
+if __name__ == '__main__':
+    training_model()
