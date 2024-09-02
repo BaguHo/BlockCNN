@@ -163,7 +163,6 @@ def training_model():
 
     # Set up data set
     train_data_24, _, _, _ = load_data_from_csv(csv_path, denoised_dir)
-    train_data_24 = train_data_24[:500]
     train_data_24 = My_dataloader(train_data_24)
     print("train_data_24")
     print(train_data_24)

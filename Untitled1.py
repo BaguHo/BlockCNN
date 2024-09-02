@@ -1,9 +1,8 @@
 #!/usr/bin/env python
 # coding: utf-8
 
-# In[1]:
 
-
+from torchvision import models
 import os
 import numpy as np
 from PIL import Image
@@ -14,38 +13,28 @@ import torch.optim as optim
 import torch_dct
 
 
-# In[2]:
-
-
 def dct_transform(x):
     return torch_dct.dct_2d(x)
 
+
 def idct_transform(x):
     return torch_dct.idct_2d(x)
-
-
-# In[3]:
 
 
 class DCTLayer(nn.Module):
     def forward(self, x):
         return dct_transform(x)
 
+
 class IDCTLayer(nn.Module):
     def forward(self, x):
         return idct_transform(x)
-
-
-# In[4]:
 
 
 def DRU(x, CDCT, Q):
     lower_bound = CDCT - Q / 2
     upper_bound = CDCT + Q / 2
     return torch.clamp(x, lower_bound, upper_bound)
-
-
-# In[5]:
 
 
 class DCTAutoEncoder(nn.Module):
@@ -58,9 +47,11 @@ class DCTAutoEncoder(nn.Module):
         layers = []
         for i in range(depth):
             if i == 0:
-                layers.append(nn.Conv2d(in_channels, 64, kernel_size=3, padding=dilations[i % len(dilations)], dilation=dilations[i % len(dilations)]))
+                layers.append(nn.Conv2d(in_channels, 64, kernel_size=3,
+                              padding=dilations[i % len(dilations)], dilation=dilations[i % len(dilations)]))
             else:
-                layers.append(nn.Conv2d(64, 64, kernel_size=3, padding=dilations[i % len(dilations)], dilation=dilations[i % len(dilations)]))
+                layers.append(nn.Conv2d(64, 64, kernel_size=3, padding=dilations[i % len(
+                    dilations)], dilation=dilations[i % len(dilations)]))
             layers.append(nn.PReLU())
         return nn.Sequential(*layers)
 
@@ -68,10 +59,6 @@ class DCTAutoEncoder(nn.Module):
         encoded = self.encoder(x)
         decoded = self.decoder(encoded)
         return decoded
-
-
-
-# In[6]:
 
 
 class PixelAutoEncoder(nn.Module):
@@ -84,9 +71,11 @@ class PixelAutoEncoder(nn.Module):
         layers = []
         for i in range(depth):
             if i == 0:
-                layers.append(nn.Conv2d(in_channels, 64, kernel_size=3, padding=dilations[i % len(dilations)], dilation=dilations[i % len(dilations)]))
+                layers.append(nn.Conv2d(in_channels, 64, kernel_size=3,
+                              padding=dilations[i % len(dilations)], dilation=dilations[i % len(dilations)]))
             else:
-                layers.append(nn.Conv2d(64, 64, kernel_size=3, padding=dilations[i % len(dilations)], dilation=dilations[i % len(dilations)]))
+                layers.append(nn.Conv2d(64, 64, kernel_size=3, padding=dilations[i % len(
+                    dilations)], dilation=dilations[i % len(dilations)]))
             layers.append(nn.PReLU())
         return nn.Sequential(*layers)
 
@@ -94,9 +83,6 @@ class PixelAutoEncoder(nn.Module):
         encoded = self.encoder(x)
         decoded = self.decoder(encoded)
         return decoded
-
-
-# In[7]:
 
 
 class DMCNN(nn.Module):
@@ -120,16 +106,10 @@ class DMCNN(nn.Module):
         return final_output, pixel_output, dct_output
 
 
-# In[8]:
-
-
 def loss_function(final_output, pixel_output, dct_output, target_image, lambda_param=0.9, theta_param=0.618):
     l_mmse = sum(theta_param ** i * nn.MSELoss()(pixel_output, target_image) for i in range(3))
     l_dct = lambda_param * nn.MSELoss()(dct_output, target_image)
     return l_mmse + l_dct
-
-
-# In[9]:
 
 
 def extract_patches_from_rgb_image(image_path: str, patch_size: int):
@@ -147,7 +127,8 @@ def extract_patches_from_rgb_image(image_path: str, patch_size: int):
         for j in range(0, width, patch_size):
             patch = image_array[i:i+patch_size, j:j+patch_size]
             if patch.shape[0] < patch_size or patch.shape[1] < patch_size:
-                patch = np.pad(patch, ((0, patch_size - patch.shape[0]), (0, patch_size - patch.shape[1]), (0, 0)), 'constant')
+                patch = np.pad(patch, ((0, patch_size - patch.shape[0]),
+                               (0, patch_size - patch.shape[1]), (0, 0)), 'constant')
             patches.append(patch)
             patch_numbers.append(patch_number)
             patch_number += 1
@@ -155,12 +136,9 @@ def extract_patches_from_rgb_image(image_path: str, patch_size: int):
     return patches, patch_numbers
 
 
-# In[10]:
-
-
 def load_data_from_csv(csv_path, original_dir, denoised_dir, patch_size):
     df = pd.read_csv(csv_path)
-    
+
     all_original_patches = []
     all_denoised_patches = []
     all_scores = []
@@ -173,14 +151,14 @@ def load_data_from_csv(csv_path, original_dir, denoised_dir, patch_size):
 
         original_path = os.path.join(original_dir, original_file_name)
         denoised_path = os.path.join(denoised_dir, denoised_file_name)
-        
+
         original_patches, original_patch_numbers = extract_patches_from_rgb_image(original_path, patch_size)
         denoised_patches, denoised_patch_numbers = extract_patches_from_rgb_image(denoised_path, patch_size)
 
         if len(original_patches) != len(denoised_patches):
             print(f"Error: Mismatch in number of patches for {row['image_name']}")
             continue
-        
+
         all_original_patches.extend(original_patches)
         all_denoised_patches.extend(denoised_patches)
         denoised_image_names.extend([row['image_name']] * len(denoised_patches))
@@ -188,18 +166,15 @@ def load_data_from_csv(csv_path, original_dir, denoised_dir, patch_size):
 
         patch_scores = row['patch_score'].strip('[]').split(', ')
 #         scores = np.array([0 if float(score) == 0 else 1 for score in patch_scores])
-        
+
 #         if len(scores) != len(original_patches):
 #             print(f"Error: Mismatch in number of patches and scores for {row['image_name']}")
 #             continue
-        
+
 #         all_scores.extend(scores)
 
 #     return all_original_patches, all_denoised_patches, all_scores, denoised_image_names, all_patch_numbers
     return all_original_patches, all_denoised_patches, denoised_image_names, all_patch_numbers
-
-
-# In[16]:
 
 
 block_size = 8
@@ -212,19 +187,12 @@ final_patch_size = 224
 previous_validation_loss = float('inf')
 
 
-# In[17]:
-
-
 original_dir = '/FINAL DATASET/maid-dataset-high-frequency/original'
 denoised_dir = '/FINAL DATASET/maid-dataset-high-frequency/denoised'
 csv_path = '/FINAL DATASET/Non_Zeros_Classified_label_filtered.csv'
 
-model = DMCNN().to('cuda') 
+model = DMCNN().to('cuda')
 optimizer = optim.Adam(model.parameters(), lr=0.001)
-
-
-
-# In[18]:
 
 
 standard_quantization_table = torch.tensor([
@@ -237,6 +205,7 @@ standard_quantization_table = torch.tensor([
     [49, 64, 78, 87, 103, 121, 120, 101],
     [72, 92, 95, 98, 112, 100, 103, 99]
 ], dtype=torch.float32)
+
 
 def get_quantization_table(QF):
     if QF < 50 and QF > 1:
@@ -255,22 +224,16 @@ QF = 20
 Q = get_quantization_table(QF).to('cuda')
 
 
-# In[19]:
-
-
 def quantize_dct(dct_coefficients, Q):
     return torch.round(dct_coefficients / Q)
 
 
-# In[20]:
-
-
 for epoch in range(num_epochs):
     patch_size = initial_patch_size + int((final_patch_size - initial_patch_size) * (epoch / num_epochs))
-    
+
     original_patches, denoised_patches, denoised_image_names, all_patch_numbers = load_data_from_csv(
         csv_path, original_dir, denoised_dir, patch_size)
-    
+
     model.train()
     for i in range(0, len(original_patches), batch_size):
         batch_original = torch.tensor(original_patches[i:i+batch_size]).float().permute(0, 3, 1, 2).to('cuda')
@@ -284,10 +247,11 @@ for epoch in range(num_epochs):
                 dct_block = dct_transform(block)
                 quantized_block = quantize_dct(dct_block, Q)
                 CDCT[:, :, h:h+block_size, w:w+block_size] = quantized_block
-        
+
         optimizer.zero_grad()
         final_output, pixel_output, dct_output = model(batch_denoised, CDCT, Q)
-        loss = loss_function(final_output, pixel_output, dct_output, batch_original, model.lambda_param, model.theta_param)
+        loss = loss_function(final_output, pixel_output, dct_output,
+                             batch_original, model.lambda_param, model.theta_param)
         loss.backward()
         optimizer.step()
 
@@ -297,45 +261,21 @@ for epoch in range(num_epochs):
         for i in range(0, len(original_patches), batch_size):
             batch_original = torch.tensor(original_patches[i:i+batch_size]).float().permute(0, 3, 1, 2).to('cuda')
             batch_denoised = torch.tensor(denoised_patches[i:i+batch_size]).float().permute(0, 3, 1, 2).to('cuda')
-            
+
             final_output, pixel_output, dct_output = model(batch_denoised, CDCT, Q)
-            loss = loss_function(final_output, pixel_output, dct_output, batch_original, model.lambda_param, model.theta_param)
+            loss = loss_function(final_output, pixel_output, dct_output,
+                                 batch_original, model.lambda_param, model.theta_param)
             validation_loss += loss.item()
 
     if validation_loss > previous_validation_loss:
         for g in optimizer.param_groups:
             g['lr'] /= 3
-    
+
     previous_validation_loss = validation_loss
 
 
-# In[ ]:
-
-
-
-
-
-# In[ ]:
-
-
-
-
-
-# In[ ]:
-
-
-
-
-
-# In[ ]:
-
-
-import torch
-import torch.nn as nn
-import torch.optim as optim
-from torchvision import models
-
 # Define a simple autoencoder for artifact removal
+
 class GeneralArtifactRemovalAutoencoder(nn.Module):
     def __init__(self):
         super(GeneralArtifactRemovalAutoencoder, self).__init__()
@@ -361,6 +301,7 @@ class GeneralArtifactRemovalAutoencoder(nn.Module):
         x = self.decoder(x)
         return x
 
+
 # Initialize model, optimizer, and loss functions
 model = GeneralArtifactRemovalAutoencoder().to('cuda')
 optimizer = optim.Adam(model.parameters(), lr=0.001)
@@ -369,10 +310,12 @@ mse_loss = nn.MSELoss()
 # Optionally, add perceptual loss (VGG19) to help preserve high-level features
 vgg = models.vgg19(pretrained=True).features.to('cuda').eval()
 
+
 def perceptual_loss(y, y_hat):
     y_vgg = vgg(y)
     y_hat_vgg = vgg(y_hat)
     return mse_loss(y_vgg, y_hat_vgg)
+
 
 # Training loop
 num_epochs = 50
@@ -384,15 +327,15 @@ for epoch in range(num_epochs):
     for batch_data in train_loader:  # Assume train_loader is already defined
         noisy_images, clean_images = batch_data
         noisy_images, clean_images = noisy_images.to('cuda'), clean_images.to('cuda')
-        
+
         optimizer.zero_grad()
         outputs = model(noisy_images)
-        
+
         # Combine MSE and perceptual loss
         loss = mse_loss(outputs, clean_images) + perceptual_loss(outputs, clean_images)
         loss.backward()
         optimizer.step()
-    
+
     # Validation loop (optional)
     model.eval()
     validation_loss = 0.0
@@ -400,21 +343,14 @@ for epoch in range(num_epochs):
         for batch_data in val_loader:  # Assume val_loader is already defined
             noisy_images, clean_images = batch_data
             noisy_images, clean_images = noisy_images.to('cuda'), clean_images.to('cuda')
-            
+
             outputs = model(noisy_images)
             val_loss = mse_loss(outputs, clean_images) + perceptual_loss(outputs, clean_images)
             validation_loss += val_loss.item()
-    
+
     if validation_loss > previous_validation_loss:
         for g in optimizer.param_groups:
             g['lr'] /= 3
     previous_validation_loss = validation_loss
 
 # Save the model
-
-
-# In[ ]:
-
-
-
-
