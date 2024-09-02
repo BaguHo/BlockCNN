@@ -1,6 +1,7 @@
 import torch.nn as nn
 import torch.nn.functional as F
 
+
 class BottleNeck(nn.Module):
     def __init__(self, inplanes, planes, stride=1):
         super(BottleNeck, self).__init__()
@@ -31,8 +32,10 @@ class BottleNeck(nn.Module):
 
         return out
 
+
 class CNN_Net(nn.Module):
-    def __init__(self):
+    def __init__(self, K=64):
+        color = 3
         super(CNN_Net, self).__init__()
         k = 64
 
@@ -55,7 +58,7 @@ class CNN_Net(nn.Module):
 
         self.conv_4 = nn.Conv2d(k*4, k*8, (1, 1), (1, 1), bias=False)
         self.bn4 = nn.BatchNorm2d(k*8)
-        
+
         self.layer_6 = BottleNeck(k*8, k*8)
 
         self.conv_5 = nn.Conv2d(k*8, k*4, 1, 1, 0, bias=False)
