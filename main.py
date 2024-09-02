@@ -14,7 +14,7 @@ from glob import glob
 from torchvision import transforms
 
 # Constants
-# TODO: image_height and image_width need to change 
+# TODO: image_height and image_width need to change
 image_height, image_width = 24, 24
 BATCH_SIZE = 32
 FILTER_K = 64
@@ -153,9 +153,8 @@ def training_model():
     create_dir(os.path.join(args.save_dir, "logs"))
 
     # Load model
-    model = CNN_Net()
-    model.apply(weight_init)
-
+    model = CNN_Net().to(DEVICE)
+    model.apply(weight_init).to(DEVICE)
     # Load loss function
     loss_fn = nn.MSELoss()
 
@@ -196,4 +195,4 @@ def training_model():
 
 
 if __name__ == '__main__':
-    training_model()
+    training_model().to(DEVICE)
