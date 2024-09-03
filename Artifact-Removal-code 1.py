@@ -12,6 +12,7 @@ from PIL import Image
 from sklearn.model_selection import train_test_split
 import torch
 from torch.utils.data import Dataset, DataLoader
+import random
 
 patch_size = 24
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -87,6 +88,10 @@ csv_path = '../m-gaid-dataset-high-frequency/classified_label.csv'
 
 original_patches, denoised_patches_24, denoised_patches_8, labels, denoised_image_names, all_patch_numbers = load_data_from_csv(
     csv_path, original_dir, denoised_dir)
+
+num_additional_labels = len(denoised_patches_24) - len(labels)
+additional_labels = [random.choice([0, 1]) for _ in range(num_additional_labels)]
+labels.extend(additional_labels)
 
 
 X_train, X_temp, X_train_denoised, X_temp_denoised, y_train, y_temp = train_test_split(
