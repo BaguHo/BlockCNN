@@ -85,9 +85,9 @@ def load_data_from_csv(csv_path, original_dir, denoised_dir):
     return all_original_patches, denoised_patches_24 * 255, denoised_patchs_8 * 255, all_scores, denoised_image_names, all_patch_numbers
 
 
-original_dir = '../high-frequency-datasets/m-gaid-dataset-high-frequency/original'
-denoised_dir = '../high-frequency-datasets/m-gaid-dataset-high-frequency/denoised'
-csv_path = '../high-frequency-datasets/m-gaid-dataset-high-frequency/classified_label.csv'
+original_dir = '../m-gaid-dataset-high-frequency/original'
+denoised_dir = '../m-gaid-dataset-high-frequency/denoised'
+csv_path = '../m-gaid-dataset-high-frequency/classified_label.csv'
 
 
 original_patches, denoised_patches_24, denoised_patches_8, labels, denoised_image_names, all_patch_numbers = load_data_from_csv(
