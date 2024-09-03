@@ -25,10 +25,10 @@ patch_size = 24
 denoised_dir = '../high-frequency-datasets/m-gaid-dataset-high-frequency/denoised'
 csv_path = '../high-frequency-datasets/m-gaid-dataset-high-frequency/classified_label.csv'
 
-transform = transforms.Compose([
-    transforms.Resize((PICTURE_SIZE, PICTURE_SIZE)),
-    transforms.ToTensor()
-])
+# transform = transforms.Compose([
+#     transforms.Resize((PICTURE_SIZE, PICTURE_SIZE)),
+#     transforms.ToTensor()
+# ])
 
 
 def extract_patches_from_rgb_image(image_path: str, patch_size: int):
@@ -108,6 +108,8 @@ class My_dataloader(Dataset):
         return img_24 * 255., img_8 * 255.
 
 
+
+
 def parse_args():
     parser = argparse.ArgumentParser(description='PyTorch Image Generating')
     parser.add_argument('--resume', default='', type=str, metavar='PATH',
@@ -163,7 +165,8 @@ def training_model():
 
     # Set up data set
     train_data_24, _, _, _ = load_data_from_csv(csv_path, denoised_dir)
-    train_data_24 = My_dataloader(train_data_24)
+    # train_data_24 = My_dataloader(train_data_24)
+    train_data_8 = train_data_24[:, :, 8:16, 8:16]
     train_loader = DataLoader(train_data_24, batch_size=BATCH_SIZE, shuffle=True, num_workers=8)
 
     # Train model

@@ -95,7 +95,7 @@ original_patches, denoised_patches_24, denoised_patches_8, labels, denoised_imag
 
 
 X_train, X_temp, X_train_denoised, X_temp_denoised, y_train, y_temp = train_test_split(
-    original_patches, denoised_patches_24, labels, test_size=0.2, random_state=42)
+    denoised_patches_24, denoised_patches_8, labels, test_size=0.2, random_state=42)
 X_val, X_test, X_val_denoised, X_test_denoised, y_val, y_test = train_test_split(
     X_temp, X_temp_denoised, y_temp, test_size=0.5, random_state=42)
 
@@ -123,37 +123,6 @@ class PatchDataset(Dataset):
         denoised_patch = torch.tensor(denoised_patch).permute(2, 0, 1).float() / 255.0
 
         return denoised_patch, original_patch, label
-
-
-# class ImageRestorationCNN(nn.Module):
-#     def __init__(self):
-#         super(ImageRestorationCNN, self).__init__()
-
-#         # CNN 구조 정의
-#         self.conv1 = nn.Conv2d(3, 64, kernel_size=3, padding=1)
-#         self.conv2 = nn.Conv2d(64, 128, kernel_size=3, padding=1)
-#         self.conv3 = nn.Conv2d(128, 256, kernel_size=3, padding=1)
-#         self.conv4 = nn.Conv2d(256, 128, kernel_size=3, padding=1)
-#         self.conv5 = nn.Conv2d(128, 64, kernel_size=3, padding=1)
-#         self.conv6 = nn.Conv2d(64, 3, kernel_size=3, padding=1)
-
-#         # Adaptive pooling for consistent output size
-#         self.adaptive_pool = nn.AdaptiveAvgPool2d((224, 224))
-#         self.relu = nn.ReLU(inplace=True)
-#         self.sigmoid = nn.Sigmoid()
-
-#     def forward(self, x):
-#         x = self.relu(self.conv1(x))
-#         x = self.relu(self.conv2(x))
-#         x = self.relu(self.conv3(x))
-#         x = self.relu(self.conv4(x))
-#         x = self.relu(self.conv5(x))
-#         x = self.sigmoid(self.conv6(x))
-
-#         # Adaptive pooling to ensure output size is 224x224
-#         x = self.adaptive_pool(x)
-
-#         return x
 
 
 class CNN_Net(nn.Module):
@@ -263,37 +232,51 @@ for epoch in range(epochs):
     model.train()
     train_loss = 0.0
 
-    for i, (denoised_patches, original_patches, _) in enumerate(train_loader):
-        denoised_patches = denoised_patches.to(device)
-        original_patches = original_patches.to(device)
-
+    for i, (data_24, data_8) in enumerate(train_loader):
         optimizer.zero_grad()
-        restored_patches = model(denoised_patches)
-        loss = criterion(restored_patches, original_patches)
+        input = data_24[:, :, 0:16, :].clone().detach().float()
+        input[:, :, 8:16, 8:24] = input[:, :, 0:8, 0:24].mean(
+            dim=-1, keepdim=True).mean(dim=-2, keepdim=True).expand_as(input[:, :, 8:16, 8:24])
+        target = data_8.clone().detach().float()
+        out = model(input)
+        loss = criterion(out, denoised_patches_8)
         loss.backward()
         optimizer.step()
-
-        train_loss += loss.item()
+        print('Train i: {} \tLoss: {:.6f}'.format(i, loss.item()))
 
     print(f"Epoch {epoch+1}/{epochs}, Loss: {train_loss/len(train_loader)}")
 
-    # Validation
-    model.eval()
-    val_loss = 0.0
-    with torch.no_grad():
-        for i, (denoised_patches, original_patches, _) in enumerate(val_loader):
-            denoised_patches = denoised_patches.to(device)
-            original_patches = original_patches.to(device)
+    # for i, (denoised_patches_24, denoised_patches_8, _) in enumerate(train_loader):
+    #     denoised_patches_24 = denoised_patches_24.to(device)
+    #     denoised_patches_8 = denoised_patches_8.to(device)
 
-            restored_patches = model(denoised_patches)
-            loss = criterion(restored_patches, original_patches)
-            val_loss += loss.item()
+    #     optimizer.zero_grad()
+    #     restored_patches = model(denoised_patches_24)
+    #     loss = criterion(restored_patches, denoised_patches_8)
+    #     loss.backward()
+    #     optimizer.step()
 
-            if i == 0:
-                ssim_val, psnr_val = calculate_metrics(original_patches[0], restored_patches[0])
-                print(f"SSIM: {ssim_val:.4f}, PSNR: {psnr_val:.2f}")
+    #     train_loss += loss.item()
 
-    print(f"Validation Loss: {val_loss/len(val_loader)}")
+    # print(f"Epoch {epoch+1}/{epochs}, Loss: {train_loss/len(train_loader)}")
+
+    # # Validation
+    # model.eval()
+    # val_loss = 0.0
+    # with torch.no_grad():
+    #     for i, (denoised_patches, original_patches, _) in enumerate(val_loader):
+    #         denoised_patches = denoised_patches.to(device)
+    #         original_patches = original_patches.to(device)
+
+    #         restored_patches = model(denoised_patches)
+    #         loss = criterion(restored_patches, original_patches)
+    #         val_loss += loss.item()
+
+    #         if i == 0:
+    #             ssim_val, psnr_val = calculate_metrics(original_patches[0], restored_patches[0])
+    #             print(f"SSIM: {ssim_val:.4f}, PSNR: {psnr_val:.2f}")
+
+    # print(f"Validation Loss: {val_loss/len(val_loader)}")
 
 
 def test_and_visualize(model, test_loader):
