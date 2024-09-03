@@ -58,7 +58,7 @@ def load_data_from_csv(csv_path, original_dir, denoised_dir):
         denoised_path = os.path.join(denoised_dir, denoised_file_name)
 
         # original_patches, original_patch_numbers = extract_patches_from_rgb_image(original_path)
-        denoised_patches, denoised_patch_numbers = extract_patches_from_rgb_image(denoised_path)
+        denoised_patches, denoised_patch_numbers = extract_patches_from_rgb_image(denoised_path, patch_size)
 
         # if len(original_patches) != len(denoised_patches):
         #     print(f"""Error: Mismatch in number of patches for {row['image_name']}  original:{
