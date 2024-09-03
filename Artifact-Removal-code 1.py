@@ -264,7 +264,7 @@ for epoch in range(epochs):
     model.train()
     train_loss = 0.0
 
-    for i, (data_24, data_8) in enumerate(train_loader):
+    for _, (data_24, data_8) in enumerate(train_loader):
         optimizer.zero_grad()
         input = data_24[:, :, 0:16, :].clone().detach().float()
         input[:, :, 8:16, 8:24] = input[:, :, 0:8, 0:24].mean(
@@ -274,7 +274,7 @@ for epoch in range(epochs):
         loss = criterion(out, denoised_patches_8)
         loss.backward()
         optimizer.step()
-        print('Train i: {} \tLoss: {:.6f}'.format(i, loss.item()))
+        print('Train i: {} \tLoss: {:.6f}'.format(loss.item()))
 
     print(f"Epoch {epoch+1}/{epochs}, Loss: {train_loss/len(train_loader)}")
 
