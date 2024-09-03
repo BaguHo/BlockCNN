@@ -125,6 +125,38 @@ class PatchDataset(Dataset):
         return denoised_patch, original_patch, label
 
 
+class BottleNeck(nn.Module):
+    def __init__(self, inplanes, planes, stride=1):
+        super(BottleNeck, self).__init__()
+        self.relu = nn.ReLU(inplace=True)
+        self.conv1 = nn.Conv2d(inplanes, planes, kernel_size=1, bias=False)
+        self.bn1 = nn.BatchNorm2d(planes)
+        self.conv2 = nn.Conv2d(planes, planes, kernel_size=3, stride=stride, padding=1, bias=False)
+        self.bn2 = nn.BatchNorm2d(planes)
+        self.conv3 = nn.Conv2d(planes, inplanes, kernel_size=1, bias=False)
+        self.bn3 = nn.BatchNorm2d(inplanes)
+        self.stride = stride
+
+    def forward(self, x):
+        residual = x
+
+        out = self.conv1(x)
+        out = self.bn1(out)
+        out = self.relu(out)
+
+        out = self.conv2(out)
+        out = self.bn2(out)
+        out = self.relu(out)
+
+        out = self.conv3(out)
+        out = self.bn3(out)
+
+        out += residual
+        out = self.relu(out)
+
+        return out
+
+
 class CNN_Net(nn.Module):
     def __init__(self):
         super(CNN_Net, self).__init__()
@@ -134,39 +166,39 @@ class CNN_Net(nn.Module):
         self.conv_1 = nn.Conv2d(color, k, (3, 5), (1, 1), bias=False)
         self.bn1 = nn.BatchNorm2d(k)
 
-        self.layer_1 = CNN_Net(k, k)
-        self.layer_2 = CNN_Net(k, k)
+        self.layer_1 = BottleNeck(k, k)
+        self.layer_2 = BottleNeck(k, k)
 
         self.conv_2 = nn.Conv2d(k, k*2, (3, 5), (1, 1), bias=False)
         self.bn2 = nn.BatchNorm2d(k*2)
 
-        self.layer_3 = CNN_Net(k*2, k*2)
+        self.layer_3 = BottleNeck(k*2, k*2)
 
         self.conv_3 = nn.Conv2d(k*2, k*4, (1, 5), (1, 1), bias=False)
         self.bn3 = nn.BatchNorm2d(k*4)
 
-        self.layer_4 = CNN_Net(k*4, k*4)
-        self.layer_5 = CNN_Net(k*4, k*4)
+        self.layer_4 = BottleNeck(k*4, k*4)
+        self.layer_5 = BottleNeck(k*4, k*4)
 
         self.conv_4 = nn.Conv2d(k*4, k*8, (1, 1), (1, 1), bias=False)
         self.bn4 = nn.BatchNorm2d(k*8)
 
-        self.layer_6 = CNN_Net(k*8, k*8)
+        self.layer_6 = BottleNeck(k*8, k*8)
 
         self.conv_5 = nn.Conv2d(k*8, k*4, 1, 1, 0, bias=False)
         self.bn5 = nn.BatchNorm2d(k*4)
 
-        self.layer_7 = CNN_Net(k*4, k*4)
+        self.layer_7 = BottleNeck(k*4, k*4)
 
         self.conv_6 = nn.Conv2d(k*4, k*2, 1, 1, 0, bias=False)
         self.bn6 = nn.BatchNorm2d(k*2)
 
-        self.layer_8 = CNN_Net(k*2, k*2)
+        self.layer_8 = BottleNeck(k*2, k*2)
 
         self.conv_7 = nn.Conv2d(k*2, k, 1, 1, 0, bias=False)
         self.bn7 = nn.BatchNorm2d(k)
 
-        self.layer_9 = CNN_Net(k, k)
+        self.layer_9 = BottleNeck(k, k)
 
         self.conv_8 = nn.Conv2d(k, color, 1, 1, 0, bias=False)
         self.sig = nn.Sigmoid()
