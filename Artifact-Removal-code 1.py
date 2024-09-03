@@ -57,15 +57,10 @@ def load_data_from_csv(csv_path, original_dir, denoised_dir):
         original_path = os.path.join(original_dir, original_file_name)
         denoised_path = os.path.join(denoised_dir, denoised_file_name)
 
-        # original_patches, original_patch_numbers = extract_patches_from_rgb_image(original_path)
+        # denoised_patches, denoised_patch_numbers = extract_patches_from_rgb_image(denoised_path, patch_size)
+
+        # all_denoised_patches.extend(denoised_patches)
         denoised_patches, denoised_patch_numbers = extract_patches_from_rgb_image(denoised_path, patch_size)
-
-        # if len(original_patches) != len(denoised_patches):
-        #     print(f"""Error: Mismatch in number of patches for {row['image_name']}  original:{
-        #         len(original_patches)}  denosied: {len(denoised_patches)}""")
-        #     continue
-
-        # all_original_patches.extend(original_patches)
         all_denoised_patches.extend(denoised_patches)
         denoised_image_names.extend([row['image_name']] * len(denoised_patches))
         all_patch_numbers.extend(denoised_patch_numbers)
@@ -73,16 +68,16 @@ def load_data_from_csv(csv_path, original_dir, denoised_dir):
         patch_scores = row['patch_score'].strip('[]').replace(',', ' ').split()
         scores = np.array([0 if float(score) == 0 else 1 for score in patch_scores])
 
-        # if len(scores) != len(original_patches):
-        #     print(f"""Error: Mismatch in number of patches and scores for {row['image_name']} score:{
-        #           len(scores)} original patches: {len(original_patches)}""")
-        #     continue
-
         all_scores.extend(scores)
-        denoised_patches_24 = all_denoised_patches
-        denoised_patchs_8 = all_denoised_patches[:, 6:18, 6:18]
 
-    return all_original_patches, denoised_patches_24 * 255, denoised_patchs_8 * 255, all_scores, denoised_image_names, all_patch_numbers
+    # 리스트를 NumPy 배열로 변환하여 다차원 인덱싱 가능하게 변경
+    all_denoised_patches_np = np.array(all_denoised_patches)
+
+    # 8x8 중심 패치를 추출
+    denoised_patches_24 = all_denoised_patches_np * 255
+    denoised_patchs_8 = all_denoised_patches_np[:, 6:18, 6:18] * 255
+
+    return all_original_patches, denoised_patches_24, denoised_patchs_8, all_scores, denoised_image_names, all_patch_numbers
 
 
 original_dir = '../m-gaid-dataset-high-frequency/original'
