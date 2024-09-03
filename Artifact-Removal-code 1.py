@@ -247,9 +247,9 @@ val_dataset = PatchDataset(X_val, X_val_denoised, y_val)
 test_dataset = PatchDataset(X_test, X_test_denoised, y_test)
 
 
-train_loader = DataLoader(train_dataset, batch_size=16, shuffle=True)
-val_loader = DataLoader(val_dataset, batch_size=16, shuffle=False)
-test_loader = DataLoader(test_dataset, batch_size=1, shuffle=False)
+train_loader = DataLoader(train_dataset, batch_size=16, shuffle=True, num_workers=8)
+val_loader = DataLoader(val_dataset, batch_size=16, shuffle=False, num_workers=8)
+test_loader = DataLoader(test_dataset, batch_size=1, shuffle=False, num_workers=8)
 
 
 model = CNN_Net().to(device)
