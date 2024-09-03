@@ -127,7 +127,7 @@ class PatchDataset(Dataset):
 
 class CNN_Net(nn.Module):
     def __init__(self):
-        super(self).__init__()
+        super().__init__()
         color = 3
         k = 64
 
