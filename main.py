@@ -94,7 +94,7 @@ class My_dataloader(Dataset):
     def __getitem__(self, idx):
         raw_image_path = self.pathes_24[idx]
 
-        width, height = 24, 24  # Assume image size is 224x224
+        width, height = 24, 24
         with open(raw_image_path, 'rb') as f:
             img_data = np.frombuffer(f.read(), dtype=np.uint8)
 
@@ -164,8 +164,6 @@ def training_model():
     # Set up data set
     train_data_24, _, _, _ = load_data_from_csv(csv_path, denoised_dir)
     train_data_24 = My_dataloader(train_data_24)
-    print("train_data_24")
-    print(train_data_24)
     train_loader = DataLoader(train_data_24, batch_size=BATCH_SIZE, shuffle=True, num_workers=8)
 
     # Train model
