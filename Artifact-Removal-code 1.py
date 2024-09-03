@@ -264,7 +264,7 @@ for epoch in range(epochs):
     model.train()
     train_loss = 0.0
 
-    for _, (data_24, data_8) in enumerate(train_loader):
+    for data_24, data_8 in enumerate(train_loader):
         optimizer.zero_grad()
         input = data_24[:, :, 0:16, :].clone().detach().float()
         input[:, :, 8:16, 8:24] = input[:, :, 0:8, 0:24].mean(
