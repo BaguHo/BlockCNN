@@ -16,14 +16,18 @@ from sklearn.model_selection import train_test_split
 from skimage.metrics import peak_signal_noise_ratio as psnr
 from skimage.metrics import structural_similarity as ssim
 
+device = torch.device("cuda" if torch.cuda.is_available() else "CPU")
+
 IMAGE_SIZE = 224
 PATCH_SIZE = 224
-BATCH_SIZE = 256
-LEARNING_RATE = 0.001
+BATCH_SIZE = 24
+LEARNING_RATE = 1e-3
+weight_decay = 1e-4
 EPOCHS = 50
 COLOR_CHANNELS = 3
 RESULTS_DIR = '/ghosting-artifact-metric/Code/'
 CHECKPOINT_INTERVAL = 5
+
 
 if not os.path.exists(RESULTS_DIR):
     os.makedirs(RESULTS_DIR)
@@ -108,14 +112,15 @@ transform = transforms.Compose([
     transforms.ToTensor(),
 ])
 
-original_dir = '../m-gaid-dataset-high-frequency/original'
-denoised_dir = '../m-gaid-dataset-high-frequency/denoised'
-csv_path = '../m-gaid-dataset-high-frequency/classified_label.csv'
+original_dir = '/ghosting-artifact-metric/dataset/m-gaid-dataset-high-frequency/original'
+denoised_dir = '/ghosting-artifact-metric/dataset/m-gaid-dataset-high-frequency/denoised'
+csv_path = '/ghosting-artifact-metric/Code/Non_Zeros_Classified_label_filtered.csv'
 
 dataset = CustomDataset(original_dir, denoised_dir, csv_path, transform=transform)
 
 train_data, temp_data = train_test_split(dataset, test_size=0.2, random_state=42)
 val_data, test_data = train_test_split(temp_data, test_size=0.5, random_state=42)
+
 
 train_loader = DataLoader(train_data, batch_size=BATCH_SIZE, shuffle=True)
 val_loader = DataLoader(val_data, batch_size=BATCH_SIZE, shuffle=False)
@@ -187,7 +192,19 @@ class CNN_Net(nn.Module):
         self.conv_6 = nn.Conv2d(k*4, k*2, 1, 1, 0, bias=False)
         self.bn6 = nn.BatchNorm2d(k*2)
 
-        self.conv_7 = nn.Conv2d(k*2, COLOR_CHANNELS, 1, 1, 0, bias=False)
+        self.layer_8 = BottleNeck(k*2, k*2)
+
+        self.conv_7 = nn.Conv2d(k*2, k, 1, 1, 0, bias=False)
+        self.bn7 = nn.BatchNorm2d(k)
+
+        self.layer_9 = BottleNeck(k, k)
+
+        # self.conv_8 = nn.Conv2d(k*2, COLOR_CHANNELS, 1, 1, 0, bias=False)
+
+        self.conv_8 = nn.Conv2d(k, COLOR_CHANNELS, 1, 1, 0, bias=False)
+        self.sig = nn.Sigmoid()
+
+        self.relu = nn.LeakyReLU(0.1)
 
     def forward(self, x):
         x = x.squeeze(1)
@@ -204,17 +221,24 @@ class CNN_Net(nn.Module):
         out = F.relu(self.bn5(self.conv_5(out)))
         out = self.layer_7(out)
         out = F.relu(self.bn6(self.conv_6(out)))
-        out = torch.sigmoid(self.conv_7(out))
+        out = self.layer_8(out)
+        out = F.relu(self.bn7(self.conv_7(out)))
+        out = self.layer_9(out)
+        out = self.conv_8(out)
+        out = self.sig(out)
+        out = out * 255
+
+        # out = torch.sigmoid(self.conv_8(out))
 
         return out
 
 
 model = CNN_Net()
 model = nn.DataParallel(model)
-model = model.cuda()
+model = model.to(device)
 
 criterion = nn.MSELoss()
-optimizer = optim.Adam(model.parameters(), lr=LEARNING_RATE)
+optimizer = optim.Adam(model.parameters(), lr=LEARNING_RATE, weight_decay=weight_decay)
 
 scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, 'min', patience=3)
 early_stopping_patience = 10
@@ -225,7 +249,7 @@ for epoch in range(EPOCHS):
     model.train()
     train_loss = 0.0
     for inputs, targets in train_loader:
-        inputs, targets = inputs.cuda(), targets.cuda()
+        inputs, targets = inputs.to(device), targets.to(device)
         optimizer.zero_grad()
         outputs = model(inputs)
         loss = criterion(outputs, targets)
@@ -240,7 +264,7 @@ for epoch in range(EPOCHS):
     val_loss = 0.0
     with torch.no_grad():
         for inputs, targets in val_loader:
-            inputs, targets = inputs.cuda(), targets.cuda()
+            inputs, targets = inputs.to(device), targets.to(device)
             outputs = model(inputs)
             loss = criterion(outputs, targets)
             val_loss += loss.item()
@@ -251,7 +275,7 @@ for epoch in range(EPOCHS):
     if val_loss < best_val_loss:
         best_val_loss = val_loss
         early_stopping_counter = 0
-        torch.save(model.state_dict(), os.path.join(RESULTS_DIR, 'best_model.pth'))
+        torch.save(model.state_dict(), os.path.join(RESULTS_DIR, 'Best_model.pth'))
         print(f"New best model saved with validation loss: {val_loss:.4f}")
     else:
         early_stopping_counter += 1
@@ -263,49 +287,32 @@ for epoch in range(EPOCHS):
     scheduler.step(val_loss)
 
 
-# model.load_state_dict(torch.load(os.path.join(RESULTS_DIR, 'best_model.pth')))
-# model.eval()
+model.load_state_dict(torch.load(os.path.join(RESULTS_DIR, 'Best_model.pth')))
+model.eval()
 
-# psnr_scores, ssim_scores = [], []
+psnr_scores, ssim_scores = [], []
 
-# with torch.no_grad():
-#     for inputs, targets in test_loader:
-#         inputs, targets = inputs.cuda(), targets.cuda()
-#         outputs = model(inputs)
-#         outputs = outputs.cpu().numpy()
-#         targets = targets.cpu().numpy()
+with torch.no_grad():
+    for inputs, targets in test_loader:
+        inputs, targets = inputs.to(device), targets.to(device)
+        outputs = model(inputs)
+        outputs = outputs.cpu().numpy()
+        targets = targets.cpu().numpy()
 
-#         for i in range(len(outputs)):
-#             psnr_scores.append(psnr(targets[i], outputs[i]))
-#             # ssim_scores.append(ssim(targets[i], outputs[i], multichannel=True))
+        for i in range(len(outputs)):
+            psnr_scores.append(psnr(targets[i], outputs[i]))
 
-# avg_psnr = np.mean(psnr_scores)
-# # avg_ssim = np.mean(ssim_scores)
+            patch_size = min(outputs[i].shape[0], outputs[i].shape[1])
+            win_size = min(7, patch_size)
 
-# print(f"Average PSNR: {avg_psnr:.4f}")
-# # print(f"Average SSIM: {avg_ssim:.4f}")
+            if win_size >= 3:
+                ssim_val = ssim(targets[i], outputs[i], win_size=win_size, channel_axis=-1, data_range=1.0)
+                ssim_scores.append(ssim_val)
+            else:
+                print(f"Skipping SSIM for patch {i} due to insufficient size")
 
+avg_psnr = np.mean(psnr_scores)
+avg_ssim = np.mean(ssim_scores) if ssim_scores else 0
 
-# from skimage.metrics import structural_similarity as ssim
-
-# psnr_scores, ssim_scores = [], []
-
-# with torch.no_grad():
-#     for inputs, targets in test_loader:
-#         inputs, targets = inputs.cuda(), targets.cuda()
-#         outputs = model(inputs)
-#         outputs = outputs.cpu().numpy()
-#         targets = targets.cpu().numpy()
-
-#         for i in range(len(outputs)):
-#             psnr_scores.append(peak_signal_noise_ratio(targets[i], outputs[i]))
-#             if min(outputs[i].shape[:2]) >= 7:  # Ensure patch size is large enough
-#                 ssim_scores.append(ssim(targets[i], outputs[i], multichannel=True, win_size=7))
-#             else:
-#                 print(f"Skipping SSIM for patch {i} due to insufficient size")
-
-# avg_psnr = np.mean(psnr_scores)
-# avg_ssim = np.mean(ssim_scores)
-
-# print(f"Average PSNR: {avg_psnr:.4f}")
-# print(f"Average SSIM: {avg_ssim:.4f}")
+print(f"Average PSNR: {avg_psnr:.4f}")
+print(f"Average SSIM: {avg_ssim:.4f}")
