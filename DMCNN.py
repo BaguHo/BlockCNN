@@ -127,39 +127,51 @@ val_loader = DataLoader(val_data, batch_size=BATCH_SIZE, shuffle=False)
 test_loader = DataLoader(test_data, batch_size=BATCH_SIZE, shuffle=False)
 
 
-class ConvNet(nn.Module):
-    def __init__(self, num_classes=10):
-        super(ConvNet, self).__init__()
-        self.layer1 = nn.Sequential(
-            nn.Conv2d(1, 16, kernel_size=5, stride=1, padding=2),
-            nn.BatchNorm2d(16),
-            nn.ReLU(),
-            nn.MaxPool2d(kernel_size=2, stride=2))
-        self.layer2 = nn.Sequential(
-            nn.Conv2d(16, 64, kernel_size=5, stride=1, padding=2),
-            nn.BatchNorm2d(64),
-            nn.ReLU(),
-            nn.MaxPool2d(kernel_size=2, stride=2))
-        self.layer3 = nn.Sequential(
-            nn.Conv2d(64, 512, kernel_size=5, stride=1, padding=2),
-            nn.BatchNorm2d(512),
-            nn.ReLU(),
-            nn.MaxPool2d(kernel_size=2, stride=2))
-        self.fc1 = nn.Linear(73728, 1000)
-        self.fc2 = nn.Linear(1000, num_classes)
+class DMCNN(nn.Module):
+    def __init__(self):
+        super(DMCNN, self).__init__()
+
+        # DCT Domain Network
+        self.dct_conv1 = nn.Conv2d(64, 64, kernel_size=3, stride=1, padding=1)
+        self.dct_conv2 = nn.Conv2d(64, 64, kernel_size=3, stride=1, padding=1)
+        self.dct_conv3 = nn.Conv2d(64, 64, kernel_size=3, stride=1, padding=1)
+        self.dct_conv4 = nn.Conv2d(64, 64, kernel_size=3, stride=1, padding=1)
+        self.dct_conv5 = nn.Conv2d(64, 64, kernel_size=3, stride=1, padding=1)
+
+        # Pixel Domain Network
+        self.pixel_conv1 = nn.Conv2d(3, 64, kernel_size=3, stride=1, padding=1)
+        self.pixel_conv2 = nn.Conv2d(64, 64, kernel_size=3, stride=1, padding=1)
+        self.pixel_conv3 = nn.Conv2d(64, 64, kernel_size=3, stride=1, padding=1)
+        self.pixel_conv4 = nn.Conv2d(64, 64, kernel_size=3, stride=1, padding=1)
+        self.pixel_conv5 = nn.Conv2d(64, 3, kernel_size=3, stride=1, padding=1)
+
+        # Batch Normalization
+        self.bn = nn.BatchNorm2d(64)
+
+        # Activation
+        self.relu = nn.ReLU(inplace=True)
 
     def forward(self, x):
-        out = self.layer1(x)
-        out = self.layer2(out)
-        out = self.layer3(out)
-        out = out.reshape(out.size(0), -1)
-        out = self.fc1(out)
-        out = F.relu(out)
-        out = self.fc2(out)
-        return out
+        # DCT domain processing
+        dct_x = self.relu(self.bn(self.dct_conv1(x)))
+        dct_x = self.relu(self.bn(self.dct_conv2(dct_x)))
+        dct_x = self.relu(self.bn(self.dct_conv3(dct_x)))
+        dct_x = self.relu(self.bn(self.dct_conv4(dct_x)))
+        dct_output = self.dct_conv5(dct_x)
+
+        # Pixel domain processing
+        pixel_x = self.relu(self.bn(self.pixel_conv1(x)))
+        pixel_x = self.relu(self.bn(self.pixel_conv2(pixel_x)))
+        pixel_x = self.relu(self.bn(self.pixel_conv3(pixel_x)))
+        pixel_x = self.relu(self.bn(self.pixel_conv4(pixel_x)))
+        pixel_output = self.pixel_conv5(pixel_x)
+
+        # Combine outputs
+        output = dct_output + pixel_output  # 결과를 가중치 합으로 결합
+        return output
 
 
-model = ConvNet()
+model = DMCNN()
 model = nn.DataParallel(model)
 model = model.to(device)
 
