@@ -143,8 +143,11 @@ class DCTLayer(nn.Module):
         return torch.FloatTensor(dct_matrix)
 
     def forward(self, x):
-        # Apply DCT transformation to the input
-        return torch.matmul(self.dct_matrix, torch.matmul(x, self.dct_matrix.t()))
+        x_dct = []
+        for i in range(x.shape[1]):
+            x_dct_channel = torch.matmul(self.dct_matrix, torch.matmul(x[:, i, :, :], self.dct_matrix.t()))
+            x_dct.append(x_dct_channel)
+        return torch.stack(x_dct, dim=1)
 
 
 class IDCTLayer(nn.Module):
@@ -163,18 +166,20 @@ class IDCTLayer(nn.Module):
         return torch.FloatTensor(dct_matrix)
 
     def forward(self, x):
-        # Apply IDCT transformation to the input
-        return torch.matmul(self.idct_matrix, torch.matmul(x, self.idct_matrix.t()))
+        x_idct = []
+        for i in range(x.shape[1]):
+            x_idct_channel = torch.matmul(self.idct_matrix, torch.matmul(x[:, i, :, :], self.idct_matrix.t()))
+            x_idct.append(x_idct_channel)
+        return torch.stack(x_idct, dim=1)
 
 
 class DMCNN(nn.Module):
     def __init__(self):
         super(DMCNN, self).__init__()
 
-        # DCT domain network (depth: 9 layers)
         self.dct_layers = nn.Sequential(
             DCTLayer(),
-            nn.Conv2d(64, 64, kernel_size=3, padding=1),
+            nn.Conv2d(3, 64, kernel_size=3, padding=1),
             nn.PReLU(init=0.1),
             nn.Conv2d(64, 64, kernel_size=3, padding=1),
             nn.PReLU(init=0.1),
@@ -198,8 +203,6 @@ class DMCNN(nn.Module):
             nn.PReLU(init=0.1),
             nn.Conv2d(64, 64, kernel_size=3, padding=1),
             nn.PReLU(init=0.1),
-            nn.Conv2d(64, 64, kernel_size=3, padding=1),
-            nn.PReLU(init=0.1),
             nn.Conv2d(64, 3, kernel_size=3, padding=1)
         )
 
@@ -212,7 +215,6 @@ class DMCNN(nn.Module):
 
         output = self.residual_weight * dct_output + (1 - self.residual_weight) * pixel_output
         return output
-
 
 model = DMCNN()
 model = nn.DataParallel(model)
