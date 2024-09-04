@@ -133,30 +133,18 @@ class DCTLayer(nn.Module):
         self.register_buffer('dct_matrix', self.create_dct_matrix(8))
 
     def create_dct_matrix(self, N):
+        """ Create an NxN DCT transform matrix. """
         dct_matrix = np.zeros((N, N))
         for k in range(N):
             for n in range(N):
                 if k == 0:
-                    dct_matrix[k, n] = np.sqrt(1 / N)
+                    dct_matrix[k, n] = np.sqrt(1/N)
                 else:
-                    dct_matrix[k, n] = np.sqrt(2 / N) * np.cos(np.pi * k * (2 * n + 1) / (2 * N))
+                    dct_matrix[k, n] = np.sqrt(2/N) * np.cos(np.pi * k * (2*n+1) / (2*N))
         return torch.FloatTensor(dct_matrix)
 
     def forward(self, x):
-        batch_size, channels, height, width = x.size()
-        x_dct = []
-
-        for i in range(channels):
-            channel_dct = []
-            for h in range(0, height, 8):
-                for w in range(0, width, 8):
-                    patch = x[:, i, h:h + 8, w:w + 8]
-                    patch_dct = torch.matmul(self.dct_matrix, torch.matmul(patch, self.dct_matrix.t()))
-                    channel_dct.append(patch_dct)
-            channel_dct = torch.stack(channel_dct, dim=0).view(batch_size, -1, 8, 8)
-            x_dct.append(channel_dct)
-
-        return torch.stack(x_dct, dim=1)
+        return torch.matmul(self.dct_matrix, torch.matmul(x, self.dct_matrix.t()))
 
 
 class IDCTLayer(nn.Module):
@@ -165,30 +153,18 @@ class IDCTLayer(nn.Module):
         self.register_buffer('idct_matrix', self.create_dct_matrix(8).t())
 
     def create_dct_matrix(self, N):
+        """ Create an NxN DCT transform matrix. """
         dct_matrix = np.zeros((N, N))
         for k in range(N):
             for n in range(N):
                 if k == 0:
-                    dct_matrix[k, n] = np.sqrt(1 / N)
+                    dct_matrix[k, n] = np.sqrt(1/N)
                 else:
-                    dct_matrix[k, n] = np.sqrt(2 / N) * np.cos(np.pi * k * (2 * n + 1) / (2 * N))
+                    dct_matrix[k, n] = np.sqrt(2/N) * np.cos(np.pi * k * (2*n+1) / (2*N))
         return torch.FloatTensor(dct_matrix)
 
     def forward(self, x):
-        batch_size, channels, height, width = x.size()
-        x_idct = []
-
-        for i in range(channels):
-            channel_idct = []
-            for h in range(0, height, 8):
-                for w in range(0, width, 8):
-                    patch = x[:, i, h:h + 8, w:w + 8]
-                    patch_idct = torch.matmul(self.idct_matrix, torch.matmul(patch, self.idct_matrix.t()))
-                    channel_idct.append(patch_idct)
-            channel_idct = torch.stack(channel_idct, dim=0).view(batch_size, -1, 8, 8)
-            x_idct.append(channel_idct)
-
-        return torch.stack(x_idct, dim=1)
+        return torch.matmul(self.idct_matrix, torch.matmul(x, self.idct_matrix.t()))
 
 
 class DMCNN(nn.Module):
@@ -210,6 +186,8 @@ class DMCNN(nn.Module):
 
         self.pixel_layers = nn.Sequential(
             nn.Conv2d(3, 64, kernel_size=3, padding=1),
+            nn.PReLU(init=0.1),
+            nn.Conv2d(64, 64, kernel_size=3, padding=1),
             nn.PReLU(init=0.1),
             nn.Conv2d(64, 64, kernel_size=3, padding=1),
             nn.PReLU(init=0.1),
