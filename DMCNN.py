@@ -130,10 +130,9 @@ test_loader = DataLoader(test_data, batch_size=BATCH_SIZE, shuffle=False)
 class DCTLayer(nn.Module):
     def __init__(self):
         super(DCTLayer, self).__init__()
-        self.register_buffer('dct_matrix', self.create_dct_matrix(8))
+        self.register_buffer('dct_matrix', self.create_dct_matrix(224))
 
     def create_dct_matrix(self, N):
-        """ Create an NxN DCT transform matrix. """
         dct_matrix = np.zeros((N, N))
         for k in range(N):
             for n in range(N):
@@ -150,10 +149,9 @@ class DCTLayer(nn.Module):
 class IDCTLayer(nn.Module):
     def __init__(self):
         super(IDCTLayer, self).__init__()
-        self.register_buffer('idct_matrix', self.create_dct_matrix(8).t())
+        self.register_buffer('idct_matrix', self.create_dct_matrix(224).t())
 
     def create_dct_matrix(self, N):
-        """ Create an NxN DCT transform matrix. """
         dct_matrix = np.zeros((N, N))
         for k in range(N):
             for n in range(N):
