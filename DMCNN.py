@@ -137,16 +137,25 @@ class DCTLayer(nn.Module):
         for k in range(N):
             for n in range(N):
                 if k == 0:
-                    dct_matrix[k, n] = np.sqrt(1/N)
+                    dct_matrix[k, n] = np.sqrt(1 / N)
                 else:
-                    dct_matrix[k, n] = np.sqrt(2/N) * np.cos(np.pi * k * (2*n+1) / (2*N))
+                    dct_matrix[k, n] = np.sqrt(2 / N) * np.cos(np.pi * k * (2 * n + 1) / (2 * N))
         return torch.FloatTensor(dct_matrix)
 
     def forward(self, x):
+        batch_size, channels, height, width = x.size()
         x_dct = []
-        for i in range(x.shape[1]):
-            x_dct_channel = torch.matmul(self.dct_matrix, torch.matmul(x[:, i, :, :], self.dct_matrix.t()))
-            x_dct.append(x_dct_channel)
+
+        for i in range(channels):
+            channel_dct = []
+            for h in range(0, height, 8):
+                for w in range(0, width, 8):
+                    patch = x[:, i, h:h + 8, w:w + 8]
+                    patch_dct = torch.matmul(self.dct_matrix, torch.matmul(patch, self.dct_matrix.t()))
+                    channel_dct.append(patch_dct)
+            channel_dct = torch.stack(channel_dct, dim=0).view(batch_size, -1, 8, 8)
+            x_dct.append(channel_dct)
+
         return torch.stack(x_dct, dim=1)
 
 
@@ -160,16 +169,25 @@ class IDCTLayer(nn.Module):
         for k in range(N):
             for n in range(N):
                 if k == 0:
-                    dct_matrix[k, n] = np.sqrt(1/N)
+                    dct_matrix[k, n] = np.sqrt(1 / N)
                 else:
-                    dct_matrix[k, n] = np.sqrt(2/N) * np.cos(np.pi * k * (2*n+1) / (2*N))
+                    dct_matrix[k, n] = np.sqrt(2 / N) * np.cos(np.pi * k * (2 * n + 1) / (2 * N))
         return torch.FloatTensor(dct_matrix)
 
     def forward(self, x):
+        batch_size, channels, height, width = x.size()
         x_idct = []
-        for i in range(x.shape[1]):
-            x_idct_channel = torch.matmul(self.idct_matrix, torch.matmul(x[:, i, :, :], self.idct_matrix.t()))
-            x_idct.append(x_idct_channel)
+
+        for i in range(channels):
+            channel_idct = []
+            for h in range(0, height, 8):
+                for w in range(0, width, 8):
+                    patch = x[:, i, h:h + 8, w:w + 8]
+                    patch_idct = torch.matmul(self.idct_matrix, torch.matmul(patch, self.idct_matrix.t()))
+                    channel_idct.append(patch_idct)
+            channel_idct = torch.stack(channel_idct, dim=0).view(batch_size, -1, 8, 8)
+            x_idct.append(channel_idct)
+
         return torch.stack(x_idct, dim=1)
 
 
@@ -215,6 +233,7 @@ class DMCNN(nn.Module):
 
         output = self.residual_weight * dct_output + (1 - self.residual_weight) * pixel_output
         return output
+
 
 model = DMCNN()
 model = nn.DataParallel(model)
