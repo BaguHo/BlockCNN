@@ -25,7 +25,7 @@ LEARNING_RATE = 1e-4
 weight_decay = 1e-4
 EPOCHS = 10
 COLOR_CHANNELS = 3
-RESULTS_DIR = '/ghosting-artifact-metric/Code/'
+RESULTS_DIR = './Results'
 CHECKPOINT_INTERVAL = 5
 
 
@@ -127,47 +127,90 @@ val_loader = DataLoader(val_data, batch_size=BATCH_SIZE, shuffle=False)
 test_loader = DataLoader(test_data, batch_size=BATCH_SIZE, shuffle=False)
 
 
+class DCTLayer(nn.Module):
+    def __init__(self):
+        super(DCTLayer, self).__init__()
+        self.register_buffer('dct_matrix', self.create_dct_matrix(8))
+
+    def create_dct_matrix(self, N):
+        dct_matrix = np.zeros((N, N))
+        for k in range(N):
+            for n in range(N):
+                if k == 0:
+                    dct_matrix[k, n] = np.sqrt(1/N)
+                else:
+                    dct_matrix[k, n] = np.sqrt(2/N) * np.cos(np.pi * k * (2*n+1) / (2*N))
+        return torch.FloatTensor(dct_matrix)
+
+    def forward(self, x):
+        # Apply DCT transformation to the input
+        return torch.matmul(self.dct_matrix, torch.matmul(x, self.dct_matrix.t()))
+
+
+class IDCTLayer(nn.Module):
+    def __init__(self):
+        super(IDCTLayer, self).__init__()
+        self.register_buffer('idct_matrix', self.create_dct_matrix(8).t())
+
+    def create_dct_matrix(self, N):
+        dct_matrix = np.zeros((N, N))
+        for k in range(N):
+            for n in range(N):
+                if k == 0:
+                    dct_matrix[k, n] = np.sqrt(1/N)
+                else:
+                    dct_matrix[k, n] = np.sqrt(2/N) * np.cos(np.pi * k * (2*n+1) / (2*N))
+        return torch.FloatTensor(dct_matrix)
+
+    def forward(self, x):
+        # Apply IDCT transformation to the input
+        return torch.matmul(self.idct_matrix, torch.matmul(x, self.idct_matrix.t()))
+
+
 class DMCNN(nn.Module):
     def __init__(self):
         super(DMCNN, self).__init__()
 
-        # DCT Domain Network
-        self.dct_conv1 = nn.Conv2d(64, 64, kernel_size=3, stride=1, padding=1)
-        self.dct_conv2 = nn.Conv2d(64, 64, kernel_size=3, stride=1, padding=1)
-        self.dct_conv3 = nn.Conv2d(64, 64, kernel_size=3, stride=1, padding=1)
-        self.dct_conv4 = nn.Conv2d(64, 64, kernel_size=3, stride=1, padding=1)
-        self.dct_conv5 = nn.Conv2d(64, 64, kernel_size=3, stride=1, padding=1)
+        # DCT domain network (depth: 9 layers)
+        self.dct_layers = nn.Sequential(
+            DCTLayer(),
+            nn.Conv2d(64, 64, kernel_size=3, padding=1),
+            nn.PReLU(init=0.1),
+            nn.Conv2d(64, 64, kernel_size=3, padding=1),
+            nn.PReLU(init=0.1),
+            nn.Conv2d(64, 64, kernel_size=3, padding=1),
+            nn.PReLU(init=0.1),
+            nn.Conv2d(64, 64, kernel_size=3, padding=1),
+            nn.PReLU(init=0.1),
+            nn.Conv2d(64, 64, kernel_size=3, padding=1)
+        )
 
-        # Pixel Domain Network
-        self.pixel_conv1 = nn.Conv2d(3, 64, kernel_size=3, stride=1, padding=1)
-        self.pixel_conv2 = nn.Conv2d(64, 64, kernel_size=3, stride=1, padding=1)
-        self.pixel_conv3 = nn.Conv2d(64, 64, kernel_size=3, stride=1, padding=1)
-        self.pixel_conv4 = nn.Conv2d(64, 64, kernel_size=3, stride=1, padding=1)
-        self.pixel_conv5 = nn.Conv2d(64, 3, kernel_size=3, stride=1, padding=1)
+        self.pixel_layers = nn.Sequential(
+            nn.Conv2d(3, 64, kernel_size=3, padding=1),
+            nn.PReLU(init=0.1),
+            nn.Conv2d(64, 64, kernel_size=3, padding=1),
+            nn.PReLU(init=0.1),
+            nn.Conv2d(64, 64, kernel_size=3, padding=1),
+            nn.PReLU(init=0.1),
+            nn.Conv2d(64, 64, kernel_size=3, padding=1),
+            nn.PReLU(init=0.1),
+            nn.Conv2d(64, 64, kernel_size=3, padding=1),
+            nn.PReLU(init=0.1),
+            nn.Conv2d(64, 64, kernel_size=3, padding=1),
+            nn.PReLU(init=0.1),
+            nn.Conv2d(64, 64, kernel_size=3, padding=1),
+            nn.PReLU(init=0.1),
+            nn.Conv2d(64, 3, kernel_size=3, padding=1)
+        )
 
-        # Batch Normalization
-        self.bn = nn.BatchNorm2d(64)
-
-        # Activation
-        self.relu = nn.ReLU(inplace=True)
+        self.residual_weight = nn.Parameter(torch.FloatTensor([0.5]))
 
     def forward(self, x):
-        # DCT domain processing
-        dct_x = self.relu(self.bn(self.dct_conv1(x)))
-        dct_x = self.relu(self.bn(self.dct_conv2(dct_x)))
-        dct_x = self.relu(self.bn(self.dct_conv3(dct_x)))
-        dct_x = self.relu(self.bn(self.dct_conv4(dct_x)))
-        dct_output = self.dct_conv5(dct_x)
+        dct_output = self.dct_layers(x)
 
-        # Pixel domain processing
-        pixel_x = self.relu(self.bn(self.pixel_conv1(x)))
-        pixel_x = self.relu(self.bn(self.pixel_conv2(pixel_x)))
-        pixel_x = self.relu(self.bn(self.pixel_conv3(pixel_x)))
-        pixel_x = self.relu(self.bn(self.pixel_conv4(pixel_x)))
-        pixel_output = self.pixel_conv5(pixel_x)
+        pixel_output = self.pixel_layers(x)
 
-        # Combine outputs
-        output = dct_output + pixel_output  # 결과를 가중치 합으로 결합
+        output = self.residual_weight * dct_output + (1 - self.residual_weight) * pixel_output
         return output
 
 
