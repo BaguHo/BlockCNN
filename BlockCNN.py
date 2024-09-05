@@ -290,6 +290,8 @@ for epoch in range(EPOCHS):
 model.load_state_dict(torch.load(os.path.join(RESULTS_DIR, 'Best_model.pth')))
 model.eval()
 
+# before: x_test <-> y_test의 PSNR
+# after: x_test <->output의 PSNR
 psnr_scores, ssim_scores = [], []
 
 with torch.no_grad():
