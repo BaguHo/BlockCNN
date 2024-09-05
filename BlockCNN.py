@@ -325,21 +325,24 @@ with torch.no_grad():
     for inputs, targets in test_loader:
         inputs, targets = inputs.to(device), targets.to(device)
         denoised_patches = targets.cv2.GaussianBlur((3, 3), 0)
+
         outputs = model(inputs)
-        denoised_outputs = model(denoised_patches).cpu().numpy()
-        # outputs2 = model(input2)
+        filtered_output = model(denoised_patches)
+
         outputs = outputs.cpu.numpy()
-        # outputs2 = outputs2.cpu().numpy()
+        filtered_output = filtered_output.cpu.numpy()
         targets = targets.cpu.numpy()
 
         for i in range(len(outputs)):
             psnr_scores.append(psnr(targets[i], outputs[i]))
-            filtered_denoised_psnr_scores.append(psnr(targets[i], denoised_outputs[i]))
+            filtered_denoised_psnr_scores.append(psnr(targets[i], filtered_output[i]))
             patch_size = min(outputs[i].shape[0], outputs[i].shape[1])
             win_size = min(7, patch_size)
 
             if win_size >= 3:
                 ssim_val = ssim(targets[i], outputs[i], win_size=win_size, channel_axis=-1, data_range=1.0)
+                filtered_val = ssim(targets[i], filtered_output[i], win_size=win_size, channel_axis=-1, data_range=1.0)
+                filtered_denoised_ssim_scores.append(filtered_val)
                 ssim_scores.append(ssim_val)
             else:
                 print(f"Skipping SSIM for patch {i} due to insufficient size")
