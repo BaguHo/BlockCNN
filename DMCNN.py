@@ -16,7 +16,7 @@ from sklearn.model_selection import train_test_split
 from skimage.metrics import peak_signal_noise_ratio as psnr
 from skimage.metrics import structural_similarity as ssim
 
-device = torch.device("cuda" if torch.cuda.is_available() else "CPU")
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 IMAGE_SIZE = 224
 PATCH_SIZE = 224
@@ -25,9 +25,8 @@ LEARNING_RATE = 1e-4
 weight_decay = 1e-4
 EPOCHS = 10
 COLOR_CHANNELS = 3
-RESULTS_DIR = './Results'
+RESULTS_DIR = '/ghosting-artifact-metric/Code/'
 CHECKPOINT_INTERVAL = 5
-
 
 if not os.path.exists(RESULTS_DIR):
     os.makedirs(RESULTS_DIR)
@@ -72,7 +71,6 @@ def extract_patches_from_rgb_image(image_path: str, patch_size: int = 224):
 
     width, height = image.size
     image_array = np.array(image)
-    patch_number = 0
 
     for i in range(0, height, patch_size):
         for j in range(0, width, patch_size):
@@ -92,7 +90,6 @@ def load_data_from_csv(csv_path, original_dir, denoised_dir):
     all_denoised_patches = []
 
     for _, row in df.iterrows():
-
         original_file_name = f"original_{row['image_name']}.png"
         denoised_file_name = f"denoised_{row['image_name']}.png"
 
@@ -112,15 +109,15 @@ transform = transforms.Compose([
     transforms.ToTensor(),
 ])
 
-original_dir = '../m-gaid-dataset-high-frequency/original'
-denoised_dir = '../m-gaid-dataset-high-frequency/denoised'
-csv_path = '../m-gaid-dataset-high-frequency/classified_label.csv'
+original_dir = '/ghosting-artifact-metric/dataset/m-gaid-dataset-high-frequency/original'
+denoised_dir = '/ghosting-artifact-metric/dataset/m-gaid-dataset-high-frequency/denoised'
+csv_path = '/ghosting-artifact-metric/Code/Non_Zeros_Classified_label_filtered.csv'
+
 
 dataset = CustomDataset(original_dir, denoised_dir, csv_path, transform=transform)
 
 train_data, temp_data = train_test_split(dataset, test_size=0.2, random_state=42)
 val_data, test_data = train_test_split(temp_data, test_size=0.5, random_state=42)
-
 
 train_loader = DataLoader(train_data, batch_size=BATCH_SIZE, shuffle=True)
 val_loader = DataLoader(val_data, batch_size=BATCH_SIZE, shuffle=False)
@@ -130,7 +127,7 @@ test_loader = DataLoader(test_data, batch_size=BATCH_SIZE, shuffle=False)
 class DCTLayer(nn.Module):
     def __init__(self):
         super(DCTLayer, self).__init__()
-        self.register_buffer('dct_matrix', self.create_dct_matrix(224))
+        self.register_buffer('dct_matrix', self.create_dct_matrix(IMAGE_SIZE))
 
     def create_dct_matrix(self, N):
         dct_matrix = np.zeros((N, N))
@@ -143,13 +140,19 @@ class DCTLayer(nn.Module):
         return torch.FloatTensor(dct_matrix)
 
     def forward(self, x):
-        return torch.matmul(self.dct_matrix, torch.matmul(x, self.dct_matrix.t()))
+        batch_size, channels, height, width = x.size()
+        assert height == IMAGE_SIZE and width == IMAGE_SIZE, "Input dimensions must match the defined IMAGE_SIZE"
+
+        x_reshaped = x.view(batch_size * channels, height, width)
+        dct_output = torch.matmul(self.dct_matrix, torch.matmul(x_reshaped, self.dct_matrix.t()))
+        dct_output = dct_output.view(batch_size, channels, height, width)
+        return dct_output
 
 
 class IDCTLayer(nn.Module):
     def __init__(self):
         super(IDCTLayer, self).__init__()
-        self.register_buffer('idct_matrix', self.create_dct_matrix(224).t())
+        self.register_buffer('idct_matrix', self.create_dct_matrix(IMAGE_SIZE).t())
 
     def create_dct_matrix(self, N):
         dct_matrix = np.zeros((N, N))
@@ -162,13 +165,16 @@ class IDCTLayer(nn.Module):
         return torch.FloatTensor(dct_matrix)
 
     def forward(self, x):
-        return torch.matmul(self.idct_matrix, torch.matmul(x, self.idct_matrix.t()))
+        batch_size, channels, height, width = x.size()
+        x_reshaped = x.view(batch_size * channels, height, width)
+        idct_output = torch.matmul(self.idct_matrix, torch.matmul(x_reshaped, self.idct_matrix.t()))
+        idct_output = idct_output.view(batch_size, channels, height, width)
+        return idct_output
 
 
 class DMCNN(nn.Module):
     def __init__(self):
         super(DMCNN, self).__init__()
-
         self.dct_layers = nn.Sequential(
             DCTLayer(),
             nn.Conv2d(3, 64, kernel_size=3, padding=1),
@@ -179,13 +185,14 @@ class DMCNN(nn.Module):
             nn.PReLU(init=0.1),
             nn.Conv2d(64, 64, kernel_size=3, padding=1),
             nn.PReLU(init=0.1),
-            nn.Conv2d(64, 64, kernel_size=3, padding=1)
+            nn.Conv2d(64, 64, kernel_size=3, padding=1),
+            nn.PReLU(init=0.1),
+            # Final conv layer to reduce channels from 64 to 3
+            nn.Conv2d(64, 3, kernel_size=3, padding=1)
         )
 
         self.pixel_layers = nn.Sequential(
             nn.Conv2d(3, 64, kernel_size=3, padding=1),
-            nn.PReLU(init=0.1),
-            nn.Conv2d(64, 64, kernel_size=3, padding=1),
             nn.PReLU(init=0.1),
             nn.Conv2d(64, 64, kernel_size=3, padding=1),
             nn.PReLU(init=0.1),
@@ -204,9 +211,7 @@ class DMCNN(nn.Module):
 
     def forward(self, x):
         dct_output = self.dct_layers(x)
-
         pixel_output = self.pixel_layers(x)
-
         output = self.residual_weight * dct_output + (1 - self.residual_weight) * pixel_output
         return output
 
@@ -253,7 +258,7 @@ for epoch in range(EPOCHS):
     if val_loss < best_val_loss:
         best_val_loss = val_loss
         early_stopping_counter = 0
-        torch.save(model.state_dict(), os.path.join(RESULTS_DIR, 'Best_model.pth'))
+        torch.save(model.state_dict(), os.path.join(RESULTS_DIR, 'Best_DMCNN_model.pth'))
         print(f"New best model saved with validation loss: {val_loss:.4f}")
     else:
         early_stopping_counter += 1
@@ -264,8 +269,7 @@ for epoch in range(EPOCHS):
 
     scheduler.step(val_loss)
 
-
-model.load_state_dict(torch.load(os.path.join(RESULTS_DIR, 'Best_model.pth')))
+# model.load_state_dict(torch.load(os.path.join(RESULTS_DIR, 'Best_DMCNN_model')))
 model.eval()
 
 psnr_scores, ssim_scores = [], []
