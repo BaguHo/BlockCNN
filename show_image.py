@@ -176,8 +176,6 @@ class CNN_Net(nn.Module):
 
         self.layer_9 = BottleNeck(k, k)
 
-        # self.conv_8 = nn.Conv2d(k*2, COLOR_CHANNELS, 1, 1, 0, bias=False)
-
         self.conv_8 = nn.Conv2d(k, COLOR_CHANNELS, 1, 1, 0, bias=False)
         self.sig = nn.Sigmoid()
 
@@ -204,8 +202,6 @@ class CNN_Net(nn.Module):
         out = self.conv_8(out)
         out = self.sig(out)
         out = out * 255
-
-        # out = torch.sigmoid(self.conv_8(out))
 
         return out
 
@@ -235,7 +231,7 @@ def visualize_multiple_comparisons(original, denoised, output, num_images=10):
         plt.show()
 
 
-# device = torch.device("cuda" if torch.cuda.is_available() else "CPU")
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")  # 'cuda' 대신 'cpu'를 사용하도록 설정합니다.
 
 if not os.path.exists(RESULTS_DIR):
     os.makedirs(RESULTS_DIR)
@@ -261,11 +257,12 @@ test_loader = DataLoader(test_data, batch_size=BATCH_SIZE, shuffle=False)
 
 model = CNN_Net()
 model = nn.DataParallel(model)
-model.load_state_dict(torch.load(os.path.join(RESULTS_DIR, 'Best_model.pth')))
+model.load_state_dict(torch.load(os.path.join(RESULTS_DIR, 'Best_model.pth'), map_location=device))
+model = model.to(device)
 model.eval()
 
 inputs, targets = next(iter(test_loader))
-inputs, targets = inputs[:10], targets[:10]
+inputs, targets = inputs.to(device), targets.to(device)
 
 with torch.no_grad():
     outputs = model(inputs)
