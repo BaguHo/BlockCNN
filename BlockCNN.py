@@ -300,11 +300,11 @@ with torch.no_grad():
         inputs, targets = inputs.to(device), targets.to(device)
         denoised_patches = targets.cv2.GaussianBlur((3, 3), 0)
         outputs = model(inputs)
-        denoised_outputs = model(denoised_patches).to(device).numpy()
+        denoised_outputs = model(denoised_patches).cpu().numpy()
         # outputs2 = model(input2)
-        outputs = outputs.to(device).numpy()
+        outputs = outputs.cpu.numpy()
         # outputs2 = outputs2.cpu().numpy()
-        targets = targets.to(device).numpy()
+        targets = targets.cpu.numpy()
 
         for i in range(len(outputs)):
             psnr_scores.append(psnr(targets[i], outputs[i]))
@@ -317,6 +317,7 @@ with torch.no_grad():
                 ssim_scores.append(ssim_val)
             else:
                 print(f"Skipping SSIM for patch {i} due to insufficient size")
+
 avg_denoised_psnr = np.mean(filtered_denoised_psnr_scores)
 avg_denoised_ssim = np.mean(filtered_denoised_ssim_scores) if filtered_denoised_ssim_scores else 0
 avg_psnr = np.mean(psnr_scores)
