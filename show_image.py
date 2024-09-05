@@ -1,3 +1,4 @@
+import matplotlib.pyplot as plt
 import os
 import cv2
 import torch
@@ -16,7 +17,6 @@ from sklearn.model_selection import train_test_split
 from skimage.metrics import peak_signal_noise_ratio as psnr
 from skimage.metrics import structural_similarity as ssim
 
-device = torch.device("cuda" if torch.cuda.is_available() else "CPU")
 
 IMAGE_SIZE = 224
 PATCH_SIZE = 224
@@ -27,10 +27,6 @@ EPOCHS = 50
 COLOR_CHANNELS = 3
 RESULTS_DIR = './ghosting-artifact-metric/Code/'
 CHECKPOINT_INTERVAL = 5
-
-
-if not os.path.exists(RESULTS_DIR):
-    os.makedirs(RESULTS_DIR)
 
 
 class CustomDataset(Dataset):
@@ -106,24 +102,6 @@ def load_data_from_csv(csv_path, original_dir, denoised_dir):
         all_denoised_patches.extend(denoised_patches)
 
     return all_original_patches, all_denoised_patches
-
-
-transform = transforms.Compose([
-    transforms.ToTensor(),
-])
-
-original_dir = '../m-gaid-dataset-high-frequency/original'
-denoised_dir = '../m-gaid-dataset-high-frequency/denoised'
-csv_path = '../m-gaid-dataset-high-frequency/classified_label.csv'
-
-dataset = CustomDataset(original_dir, denoised_dir, csv_path, transform=transform)
-
-train_data, temp_data = train_test_split(dataset, test_size=0.2, random_state=42)
-val_data, test_data = train_test_split(temp_data, test_size=0.5, random_state=42)
-
-train_loader = DataLoader(train_data, batch_size=BATCH_SIZE, shuffle=True)
-val_loader = DataLoader(val_data, batch_size=BATCH_SIZE, shuffle=False)
-test_loader = DataLoader(test_data, batch_size=BATCH_SIZE, shuffle=False)
 
 
 class BottleNeck(nn.Module):
@@ -232,97 +210,65 @@ class CNN_Net(nn.Module):
         return out
 
 
+def visualize_comparison(original, denoised, output, index=0):
+    fig, axes = plt.subplots(1, 3, figsize=(15, 5))
+
+    # 원본 이미지
+    original_image = original[index].cpu().numpy().transpose(1, 2, 0)
+    axes[0].imshow(original_image)
+    axes[0].set_title("Original Image")
+    axes[0].axis('off')
+
+    # 노이즈 제거 전 이미지 (타겟)
+    denoised_image = denoised[index].cpu().numpy().transpose(1, 2, 0)
+    axes[1].imshow(denoised_image)
+    axes[1].set_title("Denoised Image (Target)")
+    axes[1].axis('off')
+
+    # 모델 출력 이미지 (노이즈 제거 후)
+    output_image = output[index].cpu().numpy().transpose(1, 2, 0)
+    axes[2].imshow(output_image)
+    axes[2].set_title("Output Image (After Noise Removal)")
+    axes[2].axis('off')
+
+    plt.show()
+
+
+device = torch.device("cuda" if torch.cuda.is_available() else "CPU")
+
+if not os.path.exists(RESULTS_DIR):
+    os.makedirs(RESULTS_DIR)
+
+
+transform = transforms.Compose([
+    transforms.ToTensor(),
+])
+
+original_dir = '../m-gaid-dataset-high-frequency/original'
+denoised_dir = '../m-gaid-dataset-high-frequency/denoised'
+csv_path = '../m-gaid-dataset-high-frequency/classified_label.csv'
+
+dataset = CustomDataset(original_dir, denoised_dir, csv_path, transform=transform)
+
+train_data, temp_data = train_test_split(dataset, test_size=0.2, random_state=42)
+val_data, test_data = train_test_split(temp_data, test_size=0.5, random_state=42)
+
+train_loader = DataLoader(train_data, batch_size=BATCH_SIZE, shuffle=True)
+val_loader = DataLoader(val_data, batch_size=BATCH_SIZE, shuffle=False)
+test_loader = DataLoader(test_data, batch_size=BATCH_SIZE, shuffle=False)
+
+
 model = CNN_Net()
 model = nn.DataParallel(model)
+model.load_state_dict(torch.load(os.path.join(RESULTS_DIR, 'Best_model.pth'), map_location=device))
 model = model.to(device)
-
-criterion = nn.MSELoss()
-optimizer = optim.Adam(model.parameters(), lr=LEARNING_RATE, weight_decay=weight_decay)
-
-scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, 'min', patience=3)
-early_stopping_patience = 10
-best_val_loss = float('inf')
-epochs_no_improve = 0
-
-for epoch in range(EPOCHS):
-    model.train()
-    train_loss = 0.0
-    for inputs, targets in train_loader:
-        inputs, targets = inputs.to(device), targets.to(device)
-        optimizer.zero_grad()
-        outputs = model(inputs)
-        loss = criterion(outputs, targets)
-        loss.backward()
-        optimizer.step()
-        train_loss += loss.item()
-
-    train_loss /= len(train_loader)
-    print(f"Epoch {epoch+1}/{EPOCHS}, Training Loss: {train_loss:.4f}")
-
-    model.eval()
-    val_loss = 0.0
-    with torch.no_grad():
-        for inputs, targets in val_loader:
-            inputs, targets = inputs.to(device), targets.to(device)
-            outputs = model(inputs)
-            loss = criterion(outputs, targets)
-            val_loss += loss.item()
-
-    val_loss /= len(val_loader)
-    print(f"Epoch {epoch+1}/{EPOCHS}, Validation Loss: {val_loss:.4f}")
-
-    if val_loss < best_val_loss:
-        best_val_loss = val_loss
-        early_stopping_counter = 0
-        torch.save(model.state_dict(), os.path.join(RESULTS_DIR, 'Best_model.pth'))
-        print(f"New best model saved with validation loss: {val_loss:.4f}")
-    else:
-        early_stopping_counter += 1
-
-    if early_stopping_counter >= early_stopping_patience:
-        print("Early stopping triggered.")
-        break
-
-    scheduler.step(val_loss)
-
-
-model.load_state_dict(torch.load(os.path.join(RESULTS_DIR, 'Best_model.pth')))
 model.eval()
 
-# before: x_test <-> y_test의 PSNR
-# after: x_test <->output의 PSNR
-psnr_scores, ssim_scores = [], []
-filtered_denoised_psnr_scores, filtered_denoised_ssim_scores = [], []
+inputs, targets = next(iter(test_loader))
+inputs, targets = inputs.to(device), targets.to(device)
 
 with torch.no_grad():
-    # original, denoised
-    for inputs, targets in test_loader:
-        inputs, targets = inputs.to(device), targets.to(device)
-        denoised_patches = targets.cv2.GaussianBlur((3, 3), 0)
-        outputs = model(inputs)
-        denoised_outputs = model(denoised_patches).to(device).numpy()
-        # outputs2 = model(input2)
-        outputs = outputs.to(device).numpy()
-        # outputs2 = outputs2.cpu().numpy()
-        targets = targets.to(device).numpy()
+    outputs = model(inputs)
 
-        for i in range(len(outputs)):
-            psnr_scores.append(psnr(targets[i], outputs[i]))
-            filtered_denoised_psnr_scores.append(psnr(targets[i], denoised_outputs[i]))
-            patch_size = min(outputs[i].shape[0], outputs[i].shape[1])
-            win_size = min(7, patch_size)
 
-            if win_size >= 3:
-                ssim_val = ssim(targets[i], outputs[i], win_size=win_size, channel_axis=-1, data_range=1.0)
-                ssim_scores.append(ssim_val)
-            else:
-                print(f"Skipping SSIM for patch {i} due to insufficient size")
-avg_denoised_psnr = np.mean(filtered_denoised_psnr_scores)
-avg_denoised_ssim = np.mean(filtered_denoised_ssim_scores) if filtered_denoised_ssim_scores else 0
-avg_psnr = np.mean(psnr_scores)
-avg_ssim = np.mean(ssim_scores) if ssim_scores else 0
-
-print(f"Average PSNR: {avg_psnr:.4f}")
-print(f"Average SSIM: {avg_ssim:.4f}")
-print(f"Average Denoised PSNR: {avg_denoised_psnr:.4f}")
-print(f"Average Denoised SSIM: {avg_denoised_ssim:.4f}")
+visualize_comparison(inputs, targets, outputs, index=0)
