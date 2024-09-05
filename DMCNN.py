@@ -109,9 +109,9 @@ transform = transforms.Compose([
     transforms.ToTensor(),
 ])
 
-original_dir = '../m-gaid-dataset-high-frequency/original'
-denoised_dir = '../m-gaid-dataset-high-frequency/denoised'
-csv_path = '../m-gaid-dataset-high-frequency/classified_label.csv'
+original_dir = '/ghosting-artifact-metric/dataset/m-gaid-dataset-high-frequency/original'
+denoised_dir = '/ghosting-artifact-metric/dataset/m-gaid-dataset-high-frequency/denoised'
+csv_path = '/ghosting-artifact-metric/Code/Non_Zeros_Classified_label_filtered.csv'
 
 
 dataset = CustomDataset(original_dir, denoised_dir, csv_path, transform=transform)
@@ -231,7 +231,7 @@ epochs_no_improve = 0
 for epoch in range(EPOCHS):
     model.train()
     train_loss = 0.0
-    for inputs, targets in train_loader:
+    for targets, inputs in train_loader:
         inputs, targets = inputs.to(device), targets.to(device)
         optimizer.zero_grad()
         outputs = model(inputs)
@@ -246,7 +246,7 @@ for epoch in range(EPOCHS):
     model.eval()
     val_loss = 0.0
     with torch.no_grad():
-        for inputs, targets in val_loader:
+        for targets, inputs in val_loader:
             inputs, targets = inputs.to(device), targets.to(device)
             outputs = model(inputs)
             loss = criterion(outputs, targets)
@@ -275,7 +275,7 @@ model.eval()
 psnr_scores, ssim_scores = [], []
 
 with torch.no_grad():
-    for inputs, targets in test_loader:
+    for targets, inputs in test_loader:
         inputs, targets = inputs.to(device), targets.to(device)
         outputs = model(inputs)
         outputs = outputs.cpu().numpy()
