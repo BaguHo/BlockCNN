@@ -1,4 +1,3 @@
-import matplotlib.pyplot as plt
 import os
 import cv2
 import torch
@@ -26,7 +25,7 @@ LEARNING_RATE = 1e-3
 weight_decay = 1e-4
 EPOCHS = 50
 COLOR_CHANNELS = 3
-RESULTS_DIR = './ghosting-artifact-metric/Code/'
+RESULTS_DIR = '/ghosting-artifact-metric/Code/'
 CHECKPOINT_INTERVAL = 5
 
 
@@ -121,6 +120,7 @@ dataset = CustomDataset(original_dir, denoised_dir, csv_path, transform=transfor
 
 train_data, temp_data = train_test_split(dataset, test_size=0.2, random_state=42)
 val_data, test_data = train_test_split(temp_data, test_size=0.5, random_state=42)
+
 
 train_loader = DataLoader(train_data, batch_size=BATCH_SIZE, shuffle=True)
 val_loader = DataLoader(val_data, batch_size=BATCH_SIZE, shuffle=False)
@@ -233,31 +233,6 @@ class CNN_Net(nn.Module):
         return out
 
 
-def visualize_multiple_comparisons(original, denoised, output, num_images=10):
-    for index in range(num_images):
-        fig, axes = plt.subplots(1, 3, figsize=(15, 5))
-
-        # 원본 이미지
-        original_image = original[index].cpu().numpy().transpose(1, 2, 0)
-        axes[0].imshow(original_image)
-        axes[0].set_title("Original Image")
-        axes[0].axis('off')
-
-        # 노이즈 제거 전 이미지
-        denoised_image = denoised[index].cpu().numpy().transpose(1, 2, 0)
-        axes[1].imshow(denoised_image)
-        axes[1].set_title("Denoised Image (Target)")
-        axes[1].axis('off')
-
-        # 모델 출력 이미지 (노이즈 제거 후)
-        output_image = output[index].cpu().numpy().transpose(1, 2, 0)
-        axes[2].imshow(output_image)
-        axes[2].set_title("Output Image (After Noise Removal)")
-        axes[2].axis('off')
-
-        plt.show()
-
-
 model = CNN_Net()
 model = nn.DataParallel(model)
 model = model.to(device)
@@ -273,7 +248,7 @@ epochs_no_improve = 0
 for epoch in range(EPOCHS):
     model.train()
     train_loss = 0.0
-    for inputs, targets in train_loader:
+    for targets, inputs in train_loader:
         inputs, targets = inputs.to(device), targets.to(device)
         optimizer.zero_grad()
         outputs = model(inputs)
@@ -288,7 +263,7 @@ for epoch in range(EPOCHS):
     model.eval()
     val_loss = 0.0
     with torch.no_grad():
-        for inputs, targets in val_loader:
+        for targets, inputs in val_loader:
             inputs, targets = inputs.to(device), targets.to(device)
             outputs = model(inputs)
             loss = criterion(outputs, targets)
@@ -315,46 +290,29 @@ for epoch in range(EPOCHS):
 model.load_state_dict(torch.load(os.path.join(RESULTS_DIR, 'Best_model.pth')))
 model.eval()
 
-# before: x_test <-> y_test의 PSNR
-# after: x_test <->output의 PSNR
 psnr_scores, ssim_scores = [], []
-filtered_denoised_psnr_scores, filtered_denoised_ssim_scores = [], []
 
 with torch.no_grad():
-    # original, denoised
-    for inputs, targets in test_loader:
+    for targets, inputs in test_loader:
         inputs, targets = inputs.to(device), targets.to(device)
-        denoised_patches = targets.cv2.GaussianBlur((3, 3), 0)
-
         outputs = model(inputs)
-        filtered_output = model(denoised_patches)
-
-        outputs = outputs.cpu.numpy()
-        filtered_output = filtered_output.cpu.numpy()
-        targets = targets.cpu.numpy()
+        outputs = outputs.cpu().numpy()
+        targets = targets.cpu().numpy()
 
         for i in range(len(outputs)):
             psnr_scores.append(psnr(targets[i], outputs[i]))
-            filtered_denoised_psnr_scores.append(psnr(targets[i], filtered_output[i]))
+
             patch_size = min(outputs[i].shape[0], outputs[i].shape[1])
             win_size = min(7, patch_size)
 
             if win_size >= 3:
                 ssim_val = ssim(targets[i], outputs[i], win_size=win_size, channel_axis=-1, data_range=1.0)
-                filtered_val = ssim(targets[i], filtered_output[i], win_size=win_size, channel_axis=-1, data_range=1.0)
-                filtered_denoised_ssim_scores.append(filtered_val)
                 ssim_scores.append(ssim_val)
             else:
                 print(f"Skipping SSIM for patch {i} due to insufficient size")
 
-avg_denoised_psnr = np.mean(filtered_denoised_psnr_scores)
-avg_denoised_ssim = np.mean(filtered_denoised_ssim_scores) if filtered_denoised_ssim_scores else 0
 avg_psnr = np.mean(psnr_scores)
 avg_ssim = np.mean(ssim_scores) if ssim_scores else 0
 
 print(f"Average PSNR: {avg_psnr:.4f}")
 print(f"Average SSIM: {avg_ssim:.4f}")
-print(f"Average Denoised PSNR: {avg_denoised_psnr:.4f}")
-print(f"Average Denoised SSIM: {avg_denoised_ssim:.4f}")
-
-visualize_multiple_comparisons(inputs, targets, outputs, num_images=10)
