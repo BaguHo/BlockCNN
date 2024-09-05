@@ -1,3 +1,4 @@
+import matplotlib.pyplot as plt
 import os
 import cv2
 import torch
@@ -232,6 +233,31 @@ class CNN_Net(nn.Module):
         return out
 
 
+def visualize_multiple_comparisons(original, denoised, output, num_images=10):
+    for index in range(num_images):
+        fig, axes = plt.subplots(1, 3, figsize=(15, 5))
+
+        # 원본 이미지
+        original_image = original[index].cpu().numpy().transpose(1, 2, 0)
+        axes[0].imshow(original_image)
+        axes[0].set_title("Original Image")
+        axes[0].axis('off')
+
+        # 노이즈 제거 전 이미지
+        denoised_image = denoised[index].cpu().numpy().transpose(1, 2, 0)
+        axes[1].imshow(denoised_image)
+        axes[1].set_title("Denoised Image (Target)")
+        axes[1].axis('off')
+
+        # 모델 출력 이미지 (노이즈 제거 후)
+        output_image = output[index].cpu().numpy().transpose(1, 2, 0)
+        axes[2].imshow(output_image)
+        axes[2].set_title("Output Image (After Noise Removal)")
+        axes[2].axis('off')
+
+        plt.show()
+
+
 model = CNN_Net()
 model = nn.DataParallel(model)
 model = model.to(device)
@@ -327,3 +353,5 @@ print(f"Average PSNR: {avg_psnr:.4f}")
 print(f"Average SSIM: {avg_ssim:.4f}")
 print(f"Average Denoised PSNR: {avg_denoised_psnr:.4f}")
 print(f"Average Denoised SSIM: {avg_denoised_ssim:.4f}")
+
+visualize_multiple_comparisons(inputs, targets, outputs, num_images=10)
