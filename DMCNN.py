@@ -18,6 +18,9 @@ from skimage.metrics import structural_similarity as ssim
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
+RESULTS_OUTPUT_DIR = "./results"
+RESULTS_OUTPUT_FILE = os.path.join(RESULTS_OUTPUT_DIR, "psnr_ssim.txt")
+
 IMAGE_SIZE = 224
 PATCH_SIZE = 224
 BATCH_SIZE = 10
@@ -27,6 +30,9 @@ EPOCHS = 10
 COLOR_CHANNELS = 3
 RESULTS_DIR = '/ghosting-artifact-metric/Code/'
 CHECKPOINT_INTERVAL = 5
+
+if not os.path.exists(RESULTS_OUTPUT_DIR):
+    os.makedirs(RESULTS_OUTPUT_DIR)
 
 if not os.path.exists(RESULTS_DIR):
     os.makedirs(RESULTS_DIR)
@@ -109,9 +115,9 @@ transform = transforms.Compose([
     transforms.ToTensor(),
 ])
 
-original_dir = '/ghosting-artifact-metric/dataset/m-gaid-dataset-high-frequency/original'
-denoised_dir = '/ghosting-artifact-metric/dataset/m-gaid-dataset-high-frequency/denoised'
-csv_path = '/ghosting-artifact-metric/Code/Non_Zeros_Classified_label_filtered.csv'
+original_dir = '../m-gaid-dataset-high-frequency/original'
+denoised_dir = '../m-gaid-dataset-high-frequency/denoised'
+csv_path = '../m-gaid-dataset-high-frequency/classified_label.csv'
 
 
 dataset = CustomDataset(original_dir, denoised_dir, csv_path, transform=transform)
@@ -298,3 +304,8 @@ avg_ssim = np.mean(ssim_scores) if ssim_scores else 0
 
 print(f"Average PSNR: {avg_psnr:.4f}")
 print(f"Average SSIM: {avg_ssim:.4f}")
+
+
+with open(RESULTS_OUTPUT_FILE, 'w') as f:
+    f.write(f"Average PSNR: {avg_psnr:.4f}\n")
+    f.write(f"Average SSIM: {avg_ssim:.4f}\n")
