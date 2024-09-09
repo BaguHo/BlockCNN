@@ -111,8 +111,8 @@ class ImageDataset(Dataset):
         return original_patch, denoised_patch
 
 
-original_dir = '../../../m-gaid-dataset-low-frequency/original'
-denoised_dir = '../../../m-gaid-dataset-low-frequency/denoised'
+original_dir = '../../../datasets/m-gaid-dataset-low-frequency/original'
+denoised_dir = '../../../datasets/m-gaid-dataset-low-frequency/denoised'
 csv_path = './Low_frequency_classification_label.csv'
 
 

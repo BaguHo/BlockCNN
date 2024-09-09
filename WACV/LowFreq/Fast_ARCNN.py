@@ -110,10 +110,9 @@ class ImageDataset(Dataset):
         return original_patch, denoised_patch
 
 
-original_dir = '/ghosting-artifact-metric/dataset/m-gaid-dataset-low-frequency/original'
-denoised_dir = '/ghosting-artifact-metric/dataset/m-gaid-dataset-low-frequency/denoised'
-csv_path = '/ghosting-artifact-metric/Code/WACV/LowFreq/Low_frequency_classification_label.csv'
-
+original_dir = '../../../datasets/m-gaid-dataset-low-frequency/original'
+denoised_dir = '../../../datasets/m-gaid-dataset-low-frequency/denoised'
+csv_path = './Low_frequency_classification_label.csv'
 
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
